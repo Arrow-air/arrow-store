@@ -1,0 +1,30 @@
+name: Store app
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Sync and validate catalog
+        run: npm run sync-catalog
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Typecheck
+        run: npm run check
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
