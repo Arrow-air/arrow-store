@@ -1,0 +1,101 @@
+---
+import { findOfferById, getManufacturer, loadCatalog } from '../../../catalog/load';
+import Base from '../../../layouts/Base.astro';
+import { countryName } from '../../../lib/regions';
+import { getOrderForConfirmation } from '../../../server/orders';
+
+export const prerender = false;
+
+const { id } = Astro.params;
+const token = Astro.url.searchParams.get('token');
+const view = id && token ? getOrderForConfirmation(id, token) : null;
+
+if (!view) {
+    return new Response('Not found', { status: 404 });
+}
+
+const { order, items, contact } = view;
+const catalog = loadCatalog();
+const manufacturer = getManufacturer(order.manufacturer_id, catalog);
+const manufacturerName = manufacturer?.displayName ?? order.manufacturer_id;
+
+// Payment handoff: an external checkout link when the catalog provides one,
+// otherwise the manufacturer follows up with invoice instructions.
+const checkoutUrl = items
+    .map((item) => findOfferById(item.offer_id, catalog)?.offer.checkout.url)
+    .find((url) => url !== undefined);
+
+const placedAt = new Date(order.created_at).toUTCString();
+---
+
+<Base title="Order received">
+    <h1>Thanks — your order is in</h1>
+    <p class="banner">
+        Order reference <strong>{order.id}</strong>, placed {placedAt}.
+    </p>
+
+    <h2>Items</h2>
+    <table class="cart-table">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th>Price</th>
+                <th>Quantity</th>
+            </tr>
+        </thead>
+        <tbody>
+            {
+                items.map((item) => (
+                    <tr>
+                        <td>{item.name_snapshot}</td>
+                        <td>{item.price_display === 'TBD' ? 'To be confirmed' : item.price_display}</td>
+                        <td>{item.quantity}</td>
+                    </tr>
+                ))
+            }
+        </tbody>
+    </table>
+
+    <h2>Payment</h2>
+    {
+        order.payment_mode === 'manufacturer-site' && checkoutUrl ? (
+            <p>
+                Complete your payment with the manufacturer:
+                <a class="btn" href={checkoutUrl}>
+                    Pay {manufacturerName}
+                </a>
+            </p>
+        ) : (
+            <p>
+                <strong>{manufacturerName}</strong> will contact you at{' '}
+                <strong>{contact.email}</strong> with payment instructions and to confirm
+                pricing and lead time.
+            </p>
+        )
+    }
+    <p class="muted small">
+        Your payment goes directly to {manufacturerName} as merchant of record — the Arrow
+        store does not process payments.
+    </p>
+
+    <h2>Shipping to</h2>
+    <p>
+        {contact.full_name}<br />
+        {contact.address_line1}<br />
+        {contact.address_line2 && (
+            <>
+                {contact.address_line2}
+                <br />
+            </>
+        )}
+        {contact.city}{contact.region ? `, ${contact.region}` : ''} {contact.postal_code}<br />
+        {countryName(contact.country)}
+    </p>
+
+    <p class="muted small">
+        Keep this page's link to revisit your confirmation. Questions? Reply to the
+        manufacturer's follow-up email{
+            manufacturer?.supportEmail ? ` or contact ${manufacturer.supportEmail}` : ''
+        }.
+    </p>
+</Base>
