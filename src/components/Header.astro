@@ -1,0 +1,29 @@
+---
+---
+
+<header class="site-header">
+    <div class="inner">
+        <a class="brand" href="/">Arrow Store</a>
+        <nav>
+            <a href="/">Products</a>
+            <a href="/cart">Cart <span class="cart-count" data-cart-count hidden>0</span></a>
+        </nav>
+    </div>
+</header>
+
+<script>
+    import { getCart, itemCount } from '../lib/cart';
+
+    const badge = document.querySelector<HTMLElement>('[data-cart-count]');
+
+    function update(): void {
+        if (!badge) return;
+        const count = itemCount(getCart());
+        badge.textContent = String(count);
+        badge.hidden = count === 0;
+    }
+
+    update();
+    window.addEventListener('cart:changed', update);
+    window.addEventListener('storage', update);
+</script>
