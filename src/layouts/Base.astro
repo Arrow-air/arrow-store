@@ -16,7 +16,36 @@ const { title, description = "Arrow's open-source VTOL aircraft store." } = Astr
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="description" content={description} />
+        <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32x32.png" />
+        <link
+            rel="preload"
+            href="/fonts/NHaasGroteskTXPro-55Rg.woff2"
+            as="font"
+            type="font/woff2"
+            crossorigin
+        />
         <title>{title} · Arrow Store</title>
+        <script is:inline>
+            // Set the theme before first paint (same scheme as the docs site:
+            // ?theme= query param, then localStorage "theme", then OS preference).
+            (function () {
+                var theme;
+                try {
+                    theme =
+                        new URLSearchParams(window.location.search).get('theme') ||
+                        window.localStorage.getItem('theme');
+                } catch (error) {
+                    /* storage unavailable */
+                }
+                document.documentElement.setAttribute(
+                    'data-theme',
+                    theme ||
+                        (window.matchMedia('(prefers-color-scheme: dark)').matches
+                            ? 'dark'
+                            : 'light'),
+                );
+            })();
+        </script>
     </head>
     <body>
         <Header />

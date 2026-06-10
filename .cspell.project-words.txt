@@ -8,6 +8,7 @@ devkit
 devkits
 DOESNOTEXIST
 gitignore
+Grotesk
 nvmrc
 prerender
 prerendering
@@ -22,4 +23,5 @@ usdc
 vitest
 vtol
 waitlist
+wordmark
 zod
