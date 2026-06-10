@@ -1,0 +1,21 @@
+# dependencies
+node_modules/
+
+# build output
+build/
+.astro/
+
+# synced catalog snapshot (regenerate with `npm run sync-catalog`)
+.catalog/
+
+# local sqlite database
+data/
+
+# environment
+.env
+.env.*
+!.env.example
+
+# logs
+npm-debug.log*
+logs/

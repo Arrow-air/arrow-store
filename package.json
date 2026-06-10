@@ -1,0 +1,29 @@
+{
+  "name": "arrow-store",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Arrow's web store: a frontend and private order workflow over the canonical arrow-catalog data.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "sync-catalog": "node scripts/sync-catalog.ts",
+    "dev": "astro dev",
+    "check": "astro check",
+    "build": "npm run sync-catalog && astro build",
+    "preview": "node ./build/server/entry.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@astrojs/node": "^9.0.0",
+    "astro": "^5.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  }
+}
