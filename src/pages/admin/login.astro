@@ -1,0 +1,52 @@
+---
+import Base from '../../layouts/Base.astro';
+import { authenticate, createSession, getSessionUser, SESSION_COOKIE } from '../../server/auth';
+
+export const prerender = false;
+
+const existing = Astro.cookies.get(SESSION_COOKIE)?.value;
+if (existing && getSessionUser(existing)) {
+    return Astro.redirect('/admin');
+}
+
+let error = '';
+if (Astro.request.method === 'POST') {
+    const data = await Astro.request.formData();
+    const accessKey = String(data.get('accessKey') ?? '').trim();
+    const user = accessKey ? authenticate(accessKey) : null;
+    if (user) {
+        const session = createSession(user.id);
+        Astro.cookies.set(SESSION_COOKIE, session.token, {
+            httpOnly: true,
+            sameSite: 'lax',
+            path: '/admin',
+            secure: Astro.url.protocol === 'https:',
+            expires: session.expiresAt,
+        });
+        return Astro.redirect('/admin');
+    }
+    error = 'That access key was not recognized.';
+}
+---
+
+<Base title="Admin login">
+    <h1>Order admin</h1>
+    <p class="muted">
+        For Arrow store operators and approved manufacturers. Enter the access key you were
+        issued; contact store operations if you need one.
+    </p>
+    <form class="checkout-form" method="post">
+        <label>
+            Access key
+            <input
+                name="accessKey"
+                type="password"
+                required
+                autocomplete="off"
+                autofocus
+            />
+        </label>
+        {error && <p class="error-text">{error}</p>}
+        <button class="btn" type="submit">Sign in</button>
+    </form>
+</Base>

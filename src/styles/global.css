@@ -353,6 +353,34 @@ h2 {
   background: var(--primary-light);
 }
 
+/* Order workflow statuses (admin views) */
+
+.badge.received,
+.badge.in-production,
+.badge.shipped {
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.badge.awaiting-payment,
+.badge.payment-pending {
+  color: var(--warn);
+  background: var(--warn-bg);
+}
+
+.badge.paid,
+.badge.delivered,
+.badge.payment-paid {
+  color: var(--ok);
+  background: var(--ok-bg);
+}
+
+.badge.cancelled,
+.badge.payment-cancelled,
+.badge.payment-refunded {
+  color: var(--text-muted);
+}
+
 .chip {
   display: inline-block;
   padding: 0.2rem 0.5rem;
@@ -530,6 +558,57 @@ form.checkout-form textarea:focus {
 .error-text {
   color: var(--danger);
   font-size: 0.9rem;
+}
+
+/* --- Admin --- */
+
+.admin-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  padding: 0.6rem 1rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.admin-bar .mono-label {
+  color: var(--text-muted);
+  margin-right: 0.5rem;
+}
+
+.admin-bar form {
+  margin: 0;
+}
+
+.admin-bar .btn {
+  padding: 0.3rem 0.8rem;
+  font-size: 0.8rem;
+}
+
+.admin-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+@media (max-width: 56rem) {
+  .admin-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.event-list li {
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+}
+
+.event-list .mono-label {
+  display: block;
+  color: var(--text-muted);
 }
 
 /* --- Prose (policy pages) --- */

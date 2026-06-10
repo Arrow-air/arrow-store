@@ -1,0 +1,68 @@
+---
+import { getManufacturer } from '../../catalog/load';
+import AdminBar from '../../components/AdminBar.astro';
+import Base from '../../layouts/Base.astro';
+import { ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from '../../lib/display';
+import { listOrders } from '../../server/admin-orders';
+
+export const prerender = false;
+
+const user = Astro.locals.adminUser!;
+const orders = listOrders(user);
+---
+
+<Base title="Orders · Admin">
+    <AdminBar user={user} />
+    <h1>Orders</h1>
+    {orders.length === 0 && <p class="muted">No orders yet.</p>}
+    {
+        orders.length > 0 && (
+            <table class="cart-table">
+                <thead>
+                    <tr>
+                        <th>Order</th>
+                        <th>Placed</th>
+                        <th>Customer</th>
+                        {user.role === 'store-admin' && <th>Manufacturer</th>}
+                        <th>Status</th>
+                        <th>Payment</th>
+                        <th>Items</th>
+                        <th>Country</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {orders.map((order) => (
+                        <tr>
+                            <td>
+                                <a href={`/admin/orders/${order.id}`}>
+                                    {order.id.slice(0, 14)}…
+                                </a>
+                            </td>
+                            <td>{order.created_at.slice(0, 10)}</td>
+                            <td>{order.customer_name}</td>
+                            {user.role === 'store-admin' && (
+                                <td>
+                                    {getManufacturer(order.manufacturer_id)?.displayName ??
+                                        order.manufacturer_id}
+                                </td>
+                            )}
+                            <td>
+                                <span class={`badge ${order.status}`}>
+                                    {ORDER_STATUS_LABELS[order.status] ?? order.status}
+                                </span>
+                            </td>
+                            <td>
+                                <span class={`badge payment-${order.payment_status}`}>
+                                    {PAYMENT_STATUS_LABELS[order.payment_status] ??
+                                        order.payment_status}
+                                </span>
+                            </td>
+                            <td>{order.unit_count}</td>
+                            <td>{order.ship_country}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        )
+    }
+</Base>

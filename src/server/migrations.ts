@@ -76,4 +76,35 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX idx_orders_manufacturer ON orders(manufacturer_id);
     `,
   },
+  {
+    id: '0002_admin',
+    // Manufacturer/admin workflow (roadmap Phase 3). Access keys and session
+    // tokens are stored as SHA-256 hashes only. manufacturer-admin users are
+    // hard-scoped to one manufacturer; store-admin sees everything.
+    sql: `
+      CREATE TABLE admin_users (
+        id TEXT PRIMARY KEY,
+        created_at TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        role TEXT NOT NULL CHECK (role IN ('store-admin', 'manufacturer-admin')),
+        manufacturer_id TEXT,
+        access_key_hash TEXT NOT NULL UNIQUE,
+        disabled INTEGER NOT NULL DEFAULT 0,
+        CHECK (role != 'manufacturer-admin' OR manufacturer_id IS NOT NULL)
+      );
+
+      CREATE TABLE admin_sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES admin_users(id),
+        token_hash TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL
+      );
+
+      CREATE INDEX idx_admin_sessions_user ON admin_sessions(user_id);
+
+      ALTER TABLE orders ADD COLUMN payment_reference TEXT;
+      ALTER TABLE orders ADD COLUMN tracking_number TEXT;
+    `,
+  },
 ];

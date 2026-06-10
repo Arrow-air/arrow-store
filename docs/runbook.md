@@ -56,6 +56,26 @@ database from `./data/store.db` (override with `DB_PATH`). `HOST`/`PORT` env var
 the listener. SQLite requires a persistent disk — deployment targets are VPS-style hosts,
 not serverless (see docs/architecture.md).
 
+## Admin workflow (manufacturers & store ops)
+
+Admin views live under `/admin` (order list scoped by role, order detail with status /
+payment / tracking updates and an audit trail). Authentication is access-key based:
+
+```sh
+node scripts/create-admin-user.ts --name "Thomas" --role manufacturer-admin --manufacturer thomas-texas
+node scripts/create-admin-user.ts --name "Store Ops" --role store-admin
+node scripts/create-admin-user.ts --list
+node scripts/create-admin-user.ts --disable usr_...   # also revokes sessions
+```
+
+The access key is printed once and stored only as a hash — share it over a secure
+channel. Users sign in at `/admin/login`; sessions last 30 days in an HttpOnly cookie.
+`manufacturer-admin` users see only their manufacturer's orders; `store-admin` sees
+everything. Every order change writes an `order_events` audit row with the actor.
+
+Deploying to a new domain? Add it to `security.allowedDomains` in `astro.config.ts`,
+or Astro's CSRF check will reject all form posts (403).
+
 ## Orders database
 
 - Location: `data/store.db` (WAL mode; gitignored). Migrations apply automatically at
