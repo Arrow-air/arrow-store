@@ -54,6 +54,23 @@ export function paymentMethodLabel(method: string): string {
   return PAYMENT_METHOD_LABELS[method] ?? method;
 }
 
+export const ORDER_STATUS_LABELS: Record<string, string> = {
+  'received': 'Received',
+  'awaiting-payment': 'Awaiting payment',
+  'paid': 'Paid',
+  'in-production': 'In production',
+  'shipped': 'Shipped',
+  'delivered': 'Delivered',
+  'cancelled': 'Cancelled',
+};
+
+export const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending',
+  paid: 'Paid',
+  refunded: 'Refunded',
+  cancelled: 'Cancelled',
+};
+
 /** Message shown instead of an add-to-cart button for non-orderable offers. */
 export const NON_ORDERABLE_MESSAGES: Record<string, string> = {
   'waitlist': 'This offer is waitlist-only for now.',

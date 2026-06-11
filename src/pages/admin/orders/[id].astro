@@ -1,0 +1,209 @@
+---
+import { getManufacturer } from '../../../catalog/load';
+import AdminBar from '../../../components/AdminBar.astro';
+import Base from '../../../layouts/Base.astro';
+import { ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from '../../../lib/display';
+import { countryName } from '../../../lib/regions';
+import {
+    applyOrderUpdate,
+    getAdminOrder,
+    ORDER_STATUSES,
+    OrderUpdateError,
+    PAYMENT_STATUSES,
+} from '../../../server/admin-orders';
+
+export const prerender = false;
+
+const user = Astro.locals.adminUser!;
+const { id } = Astro.params;
+
+let message = '';
+let error = '';
+if (Astro.request.method === 'POST' && id) {
+    const data = await Astro.request.formData();
+    const field = (name: string): string | undefined => {
+        const value = data.get(name);
+        return value === null ? undefined : String(value).trim();
+    };
+    try {
+        const written = applyOrderUpdate(
+            id,
+            {
+                status: field('status') || undefined,
+                paymentStatus: field('paymentStatus') || undefined,
+                paymentReference: field('paymentReference'),
+                trackingNumber: field('trackingNumber'),
+                note: field('note'),
+            },
+            user,
+        );
+        message = written.length > 0 ? 'Order updated.' : 'No changes to save.';
+    } catch (updateError) {
+        if (updateError instanceof OrderUpdateError) {
+            error = updateError.message;
+        } else {
+            throw updateError;
+        }
+    }
+}
+
+const view = id ? getAdminOrder(id, user) : null;
+if (!view) {
+    return new Response('Not found', { status: 404 });
+}
+const { order, items, contact, events } = view;
+const manufacturerName =
+    getManufacturer(order.manufacturer_id)?.displayName ?? order.manufacturer_id;
+
+interface EventData {
+    from?: string | null;
+    to?: string;
+    note?: string;
+    actorName?: string;
+}
+
+function eventLine(eventType: string, data: EventData): string {
+    switch (eventType) {
+        case 'order-created':
+            return 'Order created by the customer';
+        case 'status-changed':
+            return `Status: ${data.from ?? '—'} → ${data.to}`;
+        case 'payment-status-changed':
+            return `Payment status: ${data.from ?? '—'} → ${data.to}`;
+        case 'payment-reference-updated':
+            return `Payment reference set to "${data.to}"`;
+        case 'tracking-updated':
+            return `Tracking number set to "${data.to}"`;
+        case 'note-added':
+            return `Note: ${data.note}`;
+        default:
+            return eventType;
+    }
+}
+---
+
+<Base title={`${order.id} · Admin`}>
+    <AdminBar user={user} />
+    <p><a href="/admin">← All orders</a></p>
+    <h1>Order {order.id}</h1>
+    <div>
+        <span class={`badge ${order.status}`}>
+            {ORDER_STATUS_LABELS[order.status] ?? order.status}
+        </span>
+        <span class={`badge payment-${order.payment_status}`}>
+            Payment: {PAYMENT_STATUS_LABELS[order.payment_status] ?? order.payment_status}
+        </span>
+        <span class="chip">{manufacturerName}</span>
+        <span class="chip">Catalog {order.catalog_ref.slice(0, 12)}</span>
+    </div>
+    <p class="muted small">
+        Placed {new Date(order.created_at).toUTCString()} · payment mode {order.payment_mode}
+    </p>
+
+    {message && <p class="banner">{message}</p>}
+    {error && <p class="error-text">{error}</p>}
+
+    <div class="admin-columns">
+        <section>
+            <h2>Items</h2>
+            <table class="cart-table">
+                <thead>
+                    <tr><th>Item</th><th>Offer</th><th>Price</th><th>Qty</th></tr>
+                </thead>
+                <tbody>
+                    {items.map((item) => (
+                        <tr>
+                            <td>{item.name_snapshot}</td>
+                            <td class="small muted">{item.offer_id}</td>
+                            <td>{item.price_display}</td>
+                            <td>{item.quantity}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+
+            <h2>Customer</h2>
+            <div class="card">
+                <p style="margin: 0;">
+                    {contact.full_name}<br />
+                    <a href={`mailto:${contact.email}`}>{contact.email}</a>
+                    {contact.phone && <><br />{contact.phone}</>}
+                </p>
+                <p class="meta" style="margin: 0;">
+                    {contact.address_line1}<br />
+                    {contact.address_line2 && <>{contact.address_line2}<br /></>}
+                    {contact.city}{contact.region ? `, ${contact.region}` : ''} {contact.postal_code}<br />
+                    {countryName(contact.country)}
+                </p>
+                {order.customer_notes && (
+                    <p class="meta" style="margin: 0;">
+                        <span class="mono-label">Customer notes</span><br />
+                        {order.customer_notes}
+                    </p>
+                )}
+            </div>
+        </section>
+
+        <section>
+            <h2>Update order</h2>
+            <form class="checkout-form" method="post">
+                <label>
+                    Order status
+                    <select name="status">
+                        {ORDER_STATUSES.map((status) => (
+                            <option value={status} selected={status === order.status}>
+                                {ORDER_STATUS_LABELS[status]}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <label>
+                    Payment status
+                    <select name="paymentStatus">
+                        {PAYMENT_STATUSES.map((status) => (
+                            <option value={status} selected={status === order.payment_status}>
+                                {PAYMENT_STATUS_LABELS[status]}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <label>
+                    Payment reference
+                    <input
+                        name="paymentReference"
+                        maxlength="200"
+                        value={order.payment_reference ?? ''}
+                        placeholder="invoice / transaction id"
+                    />
+                </label>
+                <label>
+                    Tracking number
+                    <input
+                        name="trackingNumber"
+                        maxlength="200"
+                        value={order.tracking_number ?? ''}
+                    />
+                </label>
+                <label>
+                    Add a note (kept in the audit log)
+                    <textarea name="note" rows="2" maxlength="2000"></textarea>
+                </label>
+                <button class="btn" type="submit">Save changes</button>
+            </form>
+
+            <h2>History</h2>
+            <ul class="plain event-list">
+                {events.map((event) => {
+                    const data = JSON.parse(event.data_json ?? '{}') as EventData;
+                    return (
+                        <li>
+                            <span class="mono-label">{event.created_at.slice(0, 16).replace('T', ' ')}</span>
+                            {eventLine(event.event_type, data)}
+                            {data.actorName && <span class="note">by {data.actorName}</span>}
+                        </li>
+                    );
+                })}
+            </ul>
+        </section>
+    </div>
+</Base>

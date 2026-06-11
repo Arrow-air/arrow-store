@@ -1,0 +1,24 @@
+---
+import { getManufacturer } from '../catalog/load';
+import type { AdminUser } from '../server/auth';
+
+interface Props {
+    user: AdminUser;
+}
+
+const { user } = Astro.props;
+const scope =
+    user.role === 'store-admin'
+        ? 'Store admin — all manufacturers'
+        : (getManufacturer(user.manufacturerId ?? '')?.displayName ?? user.manufacturerId);
+---
+
+<div class="admin-bar">
+    <span>
+        <span class="mono-label">Signed in</span>
+        {user.displayName} · {scope}
+    </span>
+    <form method="post" action="/admin/logout">
+        <button class="btn secondary" type="submit">Sign out</button>
+    </form>
+</div>
