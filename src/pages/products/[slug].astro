@@ -1,0 +1,155 @@
+---
+import {
+    getAddOnProducts,
+    getManufacturer,
+    getProductBySlug,
+    getVisibleOffers,
+    loadCatalog,
+} from '../../catalog/load';
+import OfferCard from '../../components/OfferCard.astro';
+import ProductCard from '../../components/ProductCard.astro';
+import StatusBadge from '../../components/StatusBadge.astro';
+import Base from '../../layouts/Base.astro';
+import { LIFECYCLE_STAGE_LABELS } from '../../lib/display';
+
+export function getStaticPaths() {
+    return loadCatalog().products.map((product) => ({ params: { slug: product.slug } }));
+}
+
+const { slug } = Astro.params;
+const catalog = loadCatalog();
+const product = getProductBySlug(slug, catalog)!;
+const offers = getVisibleOffers(product);
+const addOns = getAddOnProducts(product, catalog);
+
+const lineItemSections = [
+    { title: "What's included", items: product.included ?? [] },
+    { title: 'Not included', items: product.notIncluded ?? [] },
+    { title: 'Required separately', items: product.requiredSeparately ?? [] },
+].filter((section) => section.items.length > 0);
+---
+
+<Base title={product.name} description={product.shortDescription}>
+    <section class="hero">
+        <div>
+            <StatusBadge status={product.status} />
+            {
+                product.lifecycleStage && (
+                    <span class="chip">
+                        {LIFECYCLE_STAGE_LABELS[product.lifecycleStage] ?? product.lifecycleStage}
+                    </span>
+                )
+            }
+        </div>
+        <h1>{product.name}</h1>
+        <p>{product.shortDescription}</p>
+    </section>
+
+    <h2>Choose your manufacturer</h2>
+    <p class="muted">
+        Pick the offer for your region. Your whole order is fulfilled and charged by the
+        manufacturer you choose here.
+    </p>
+    <div class="grid">
+        {
+            offers.map((offer) => (
+                <OfferCard
+                    product={product}
+                    offer={offer}
+                    manufacturer={getManufacturer(offer.manufacturerId, catalog)!}
+                    catalogRef={catalog.manifest.resolvedSha}
+                />
+            ))
+        }
+    </div>
+
+    {
+        lineItemSections.map((section) => (
+            <section>
+                <h2>{section.title}</h2>
+                <ul class="plain">
+                    {section.items.map((item) => (
+                        <li>
+                            {item.label}
+                            {item.quantity !== undefined && ` × ${item.quantity}`}
+                            {item.notes && <span class="note">{item.notes}</span>}
+                        </li>
+                    ))}
+                </ul>
+            </section>
+        ))
+    }
+
+    {
+        product.standards.length > 0 && (
+            <section>
+                <h2>Build standards</h2>
+                <ul class="plain">
+                    {product.standards.map((standard) => (
+                        <li>
+                            <a href={standard.url}>{standard.label}</a>
+                            {standard.required && <span class="chip">Required</span>}
+                            {standard.description && (
+                                <span class="note">{standard.description}</span>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            </section>
+        )
+    }
+
+    {
+        addOns.length > 0 && (
+            <section>
+                <h2>Add-ons from the same manufacturers</h2>
+                <p class="muted">
+                    These can ship in the same order because they share a manufacturer checkout
+                    group.
+                </p>
+                <div class="grid">
+                    {addOns.map((addOn) => (
+                        <ProductCard product={addOn} />
+                    ))}
+                </div>
+            </section>
+        )
+    }
+
+    <section>
+        <h2>Support & warranty</h2>
+        <ul class="plain">
+            <li><a href={`/policies/${product.supportPolicyId}`}>Support policy</a></li>
+            <li><a href={`/policies/${product.warrantyPolicyId}`}>Warranty policy</a></li>
+        </ul>
+    </section>
+</Base>
+
+<script>
+    import { addItem, startNewCartWith, type OfferSnapshot } from '../../lib/cart';
+
+    for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-offer]')) {
+        button.addEventListener('click', () => {
+            const snapshot = JSON.parse(button.dataset.offer!) as OfferSnapshot;
+            const result = addItem(snapshot);
+            if (!result.ok) {
+                const replace = window.confirm(
+                    `Your cart contains items from ${result.currentManufacturerName}. ` +
+                        'Each order is fulfilled and charged by a single manufacturer, so this ' +
+                        'item needs a separate order.\n\n' +
+                        'OK: empty the cart and start a new one with this item.\n' +
+                        'Cancel: keep your current cart.',
+                );
+                if (!replace) return;
+                startNewCartWith(snapshot);
+            }
+            const original = button.textContent;
+            button.textContent = 'Added to cart ✓';
+            button.disabled = true;
+            window.setTimeout(() => {
+                button.textContent = original;
+                button.disabled = false;
+            }, 1200);
+        });
+    }
+</script>

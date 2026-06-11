@@ -1,0 +1,50 @@
+---
+import ArrowLogo from './ArrowLogo.astro';
+---
+
+<header class="site-header">
+    <div class="inner">
+        <a class="brand" href="/">
+            <ArrowLogo />
+            <span class="brand-label">Store</span>
+        </a>
+        <nav>
+            <a href="https://www.arrowair.com">Homepage</a>
+            <a href="https://www.arrowair.com/docs/intro">Docs</a>
+            <a href="/">Products</a>
+            <a href="/cart">Cart <span class="cart-count" data-cart-count hidden>0</span></a>
+            <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle theme">
+                <span class="when-light">Dark</span>
+                <span class="when-dark">Light</span>
+            </button>
+        </nav>
+    </div>
+</header>
+
+<script>
+    import { getCart, itemCount } from '../lib/cart';
+
+    const badge = document.querySelector<HTMLElement>('[data-cart-count]');
+
+    function update(): void {
+        if (!badge) return;
+        const count = itemCount(getCart());
+        badge.textContent = String(count);
+        badge.hidden = count === 0;
+    }
+
+    update();
+    window.addEventListener('cart:changed', update);
+    window.addEventListener('storage', update);
+
+    document.querySelector('[data-theme-toggle]')?.addEventListener('click', () => {
+        const root = document.documentElement;
+        const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-theme', next);
+        try {
+            localStorage.setItem('theme', next);
+        } catch {
+            // storage unavailable; theme just won't persist
+        }
+    });
+</script>

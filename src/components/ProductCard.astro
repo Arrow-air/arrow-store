@@ -1,0 +1,25 @@
+---
+import { getVisibleOffers } from '../catalog/load';
+import type { Product } from '../catalog/schema';
+import { PRODUCT_CATEGORY_LABELS } from '../lib/display';
+import StatusBadge from './StatusBadge.astro';
+
+interface Props {
+    product: Product;
+}
+
+const { product } = Astro.props;
+const regions = [
+    ...new Set(getVisibleOffers(product).map((offer) => offer.regionLabel).filter(Boolean)),
+];
+---
+
+<article class="card">
+    <h3><a href={`/products/${product.slug}`}>{product.name}</a></h3>
+    <div>
+        <StatusBadge status={product.status} />
+        <span class="chip">{PRODUCT_CATEGORY_LABELS[product.category] ?? product.category}</span>
+    </div>
+    <p class="meta">{product.shortDescription}</p>
+    {regions.length > 0 && <p class="meta">Ships to: {regions.join(', ')}</p>}
+</article>

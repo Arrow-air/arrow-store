@@ -1,0 +1,185 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Checkout">
+    <h1>Checkout</h1>
+
+    <section data-checkout-empty hidden>
+        <p class="muted">Your cart is empty — there is nothing to check out yet.</p>
+        <a class="btn secondary" href="/">Browse products</a>
+    </section>
+
+    <section data-checkout-form-section hidden>
+        <p class="banner" data-checkout-banner></p>
+
+        <h2>Order summary</h2>
+        <table class="cart-table">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Price</th>
+                    <th>Quantity</th>
+                </tr>
+            </thead>
+            <tbody data-checkout-items></tbody>
+        </table>
+
+        <h2>Contact & shipping</h2>
+        <form class="checkout-form" data-checkout-form novalidate>
+            <label>
+                Full name
+                <input name="fullName" required maxlength="200" autocomplete="name" />
+            </label>
+            <label>
+                Email
+                <input name="email" type="email" required maxlength="320" autocomplete="email" />
+            </label>
+            <label>
+                Phone (optional)
+                <input name="phone" type="tel" maxlength="50" autocomplete="tel" />
+            </label>
+            <label>
+                Address line 1
+                <input name="addressLine1" required maxlength="200" autocomplete="address-line1" />
+            </label>
+            <label>
+                Address line 2 (optional)
+                <input name="addressLine2" maxlength="200" autocomplete="address-line2" />
+            </label>
+            <div class="field-row">
+                <label>
+                    City
+                    <input name="city" required maxlength="100" autocomplete="address-level2" />
+                </label>
+                <label>
+                    State / region (optional)
+                    <input name="region" maxlength="100" autocomplete="address-level1" />
+                </label>
+            </div>
+            <div class="field-row">
+                <label>
+                    Postal code
+                    <input name="postalCode" required maxlength="20" autocomplete="postal-code" />
+                </label>
+                <label>
+                    Country
+                    <select name="country" required data-country-select></select>
+                </label>
+            </div>
+            <label>
+                Order notes (optional)
+                <textarea name="customerNotes" rows="3" maxlength="2000"></textarea>
+            </label>
+            <p class="error-text" data-checkout-error hidden></p>
+            <button class="btn" type="submit">Place order</button>
+            <p class="muted small">
+                Placing an order sends your details to the manufacturer so they can arrange
+                payment and shipping. The store does not process payments.
+            </p>
+        </form>
+    </section>
+</Base>
+
+<script>
+    import { clearCart, getCart } from '../lib/cart';
+    import { countryName, shippableCountries } from '../lib/regions';
+
+    const emptySection = document.querySelector<HTMLElement>('[data-checkout-empty]')!;
+    const formSection = document.querySelector<HTMLElement>('[data-checkout-form-section]')!;
+    const banner = document.querySelector<HTMLElement>('[data-checkout-banner]')!;
+    const tbody = document.querySelector<HTMLElement>('[data-checkout-items]')!;
+    const form = document.querySelector<HTMLFormElement>('[data-checkout-form]')!;
+    const countrySelect = document.querySelector<HTMLSelectElement>('[data-country-select]')!;
+    const errorText = document.querySelector<HTMLElement>('[data-checkout-error]')!;
+
+    const cart = getCart();
+    if (cart.items.length === 0) {
+        emptySection.hidden = false;
+    } else {
+        formSection.hidden = false;
+        banner.textContent =
+            `This order is fulfilled and charged by ${cart.manufacturerName} as merchant of ` +
+            'record. You will receive payment instructions after placing the order.';
+
+        for (const item of cart.items) {
+            const row = document.createElement('tr');
+            for (const value of [item.name, item.priceDisplay, String(item.quantity)]) {
+                const cell = document.createElement('td');
+                cell.textContent = value;
+                row.appendChild(cell);
+            }
+            tbody.appendChild(row);
+        }
+
+        const countries = shippableCountries(cart.items.map((item) => item.shipsTo));
+        for (const code of countries) {
+            const option = document.createElement('option');
+            option.value = code;
+            option.textContent = countryName(code);
+            countrySelect.appendChild(option);
+        }
+    }
+
+    function showError(message: string): void {
+        errorText.textContent = message;
+        errorText.hidden = false;
+    }
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        errorText.hidden = true;
+
+        if (!form.reportValidity()) return;
+
+        const data = new FormData(form);
+        const optional = (name: string): string | undefined => {
+            const value = String(data.get(name) ?? '').trim();
+            return value === '' ? undefined : value;
+        };
+
+        const payload = {
+            items: getCart().items.map((item) => ({
+                offerId: item.offerId,
+                quantity: item.quantity,
+            })),
+            customer: {
+                fullName: String(data.get('fullName')).trim(),
+                email: String(data.get('email')).trim(),
+                phone: optional('phone'),
+                addressLine1: String(data.get('addressLine1')).trim(),
+                addressLine2: optional('addressLine2'),
+                city: String(data.get('city')).trim(),
+                region: optional('region'),
+                postalCode: String(data.get('postalCode')).trim(),
+                country: String(data.get('country')),
+            },
+            customerNotes: optional('customerNotes'),
+        };
+
+        const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+        submit.disabled = true;
+        try {
+            const response = await fetch('/api/orders', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const result = (await response.json()) as {
+                confirmationUrl?: string;
+                error?: string;
+                issues?: string[];
+            };
+            if (response.ok && result.confirmationUrl) {
+                clearCart();
+                window.location.assign(result.confirmationUrl);
+                return;
+            }
+            showError(result.issues?.join('; ') ?? result.error ?? 'Order could not be placed.');
+        } catch {
+            showError('Network error — your order was not placed. Please try again.');
+        } finally {
+            submit.disabled = false;
+        }
+    });
+</script>

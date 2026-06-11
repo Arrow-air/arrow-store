@@ -1,0 +1,69 @@
+---
+import { displayValue, isOfferOrderable } from '../catalog/load';
+import type { Manufacturer, Offer, Product } from '../catalog/schema';
+import type { OfferSnapshot } from '../lib/cart';
+import { NON_ORDERABLE_MESSAGES, paymentMethodLabel } from '../lib/display';
+import StatusBadge from './StatusBadge.astro';
+
+interface Props {
+    product: Product;
+    offer: Offer;
+    manufacturer: Manufacturer;
+    catalogRef: string;
+}
+
+const { product, offer, manufacturer, catalogRef } = Astro.props;
+
+const orderable = isOfferOrderable(offer);
+const price = displayValue(offer.priceDisplay, 'Pricing to be announced');
+const leadTime = displayValue(offer.leadTimeDisplay, '');
+const inventory = displayValue(offer.inventoryDisplay, '');
+const merchantName = displayValue(
+    offer.merchantOfRecordName,
+    displayValue(manufacturer.merchantOfRecord.legalName, manufacturer.displayName),
+);
+
+const snapshot: OfferSnapshot = {
+    productId: product.id,
+    offerId: offer.id,
+    name: product.name,
+    priceDisplay: price,
+    checkoutGroupId: offer.checkoutGroupId,
+    manufacturerId: offer.manufacturerId,
+    manufacturerName: manufacturer.displayName,
+    catalogRef,
+    shipsTo: offer.shipsTo ?? [],
+};
+---
+
+<article class="card offer-card">
+    <h3>{manufacturer.displayName}</h3>
+    <div>
+        <StatusBadge status={offer.status} />
+        {offer.regionLabel && <span class="chip">{offer.regionLabel}</span>}
+    </div>
+    <p class="price">{price}</p>
+    <ul class="plain meta">
+        {offer.shipsFrom && <li>Ships from {offer.shipsFrom}</li>}
+        {leadTime && <li>Lead time: {leadTime}</li>}
+        {inventory && <li>{inventory}</li>}
+        {
+            offer.paymentMethods && offer.paymentMethods.length > 0 && (
+                <li>Payment: {offer.paymentMethods.map(paymentMethodLabel).join(', ')}</li>
+            )
+        }
+    </ul>
+    <p class="meta small">
+        Sold and charged by <strong>{merchantName}</strong> as merchant of record.
+    </p>
+    {
+        orderable ? (
+            <button class="btn" type="button" data-offer={JSON.stringify(snapshot)}>
+                Add to cart
+            </button>
+        ) : (
+            <p class="notice">{NON_ORDERABLE_MESSAGES[offer.status] ?? 'Not currently orderable.'}</p>
+        )
+    }
+    {offer.checkout.customerNotice && <p class="meta small">{offer.checkout.customerNotice}</p>}
+</article>

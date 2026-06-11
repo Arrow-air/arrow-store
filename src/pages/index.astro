@@ -1,0 +1,57 @@
+---
+import { loadCatalog } from '../catalog/load';
+import ProductCard from '../components/ProductCard.astro';
+import StatusBadge from '../components/StatusBadge.astro';
+import Base from '../layouts/Base.astro';
+
+const catalog = loadCatalog();
+const featured =
+    catalog.products.find((product) => product.category === 'aircraft-devkit') ??
+    catalog.products[0];
+const approvedManufacturers = catalog.manufacturers.filter(
+    (manufacturer) => manufacturer.approved,
+);
+---
+
+<Base title="Open-source VTOL aircraft and parts">
+    {
+        featured && (
+            <section class="hero">
+                <StatusBadge status={featured.status} />
+                <h1>{featured.name}</h1>
+                <p>{featured.shortDescription}</p>
+                <a class="btn" href={`/products/${featured.slug}`}>
+                    View the {featured.name}
+                </a>
+            </section>
+        )
+    }
+
+    <h2>Products</h2>
+    <div class="grid">
+        {catalog.products.map((product) => <ProductCard product={product} />)}
+    </div>
+
+    <h2>Approved manufacturers</h2>
+    <p class="muted">
+        Every product is built and sold by an Arrow-approved manufacturer as merchant of
+        record. Each order ships from a single manufacturer.
+    </p>
+    <div class="grid">
+        {
+            approvedManufacturers.map((manufacturer) => (
+                <article class="card">
+                    <h3>{manufacturer.displayName}</h3>
+                    <div>
+                        <span class="badge neutral">
+                            {manufacturer.approvalStatus === 'trusted-mvp'
+                                ? 'Trusted MVP'
+                                : manufacturer.approvalStatus}
+                        </span>
+                    </div>
+                    <p class="meta">Ships from {manufacturer.shipsFrom.join(', ')}</p>
+                </article>
+            ))
+        }
+    </div>
+</Base>

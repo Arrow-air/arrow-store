@@ -1,0 +1,101 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Cart">
+    <h1>Your cart</h1>
+
+    <section data-cart-empty hidden>
+        <p class="muted">Your cart is empty.</p>
+        <a class="btn secondary" href="/">Browse products</a>
+    </section>
+
+    <section data-cart-filled hidden>
+        <p class="banner" data-cart-banner></p>
+        <table class="cart-table">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Price</th>
+                    <th>Quantity</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody data-cart-items></tbody>
+        </table>
+        <p style="margin-top: 1.5rem;">
+            <a class="btn" href="/checkout">Continue to checkout</a>
+        </p>
+        <p class="muted small">
+            Prices are confirmed by the manufacturer before payment. The store does not process
+            payments.
+        </p>
+    </section>
+</Base>
+
+<script>
+    import { getCart, removeItem, setQuantity, type CartState } from '../lib/cart';
+
+    const emptySection = document.querySelector<HTMLElement>('[data-cart-empty]')!;
+    const filledSection = document.querySelector<HTMLElement>('[data-cart-filled]')!;
+    const banner = document.querySelector<HTMLElement>('[data-cart-banner]')!;
+    const tbody = document.querySelector<HTMLElement>('[data-cart-items]')!;
+
+    function renderRow(cart: CartState, index: number): HTMLTableRowElement {
+        const item = cart.items[index]!;
+        const row = document.createElement('tr');
+
+        const name = document.createElement('td');
+        name.textContent = item.name;
+        row.appendChild(name);
+
+        const price = document.createElement('td');
+        price.textContent = item.priceDisplay;
+        row.appendChild(price);
+
+        const qtyCell = document.createElement('td');
+        const qty = document.createElement('input');
+        qty.type = 'number';
+        qty.min = '1';
+        qty.className = 'qty';
+        qty.value = String(item.quantity);
+        qty.addEventListener('change', () => {
+            const value = Number.parseInt(qty.value, 10);
+            setQuantity(item.offerId, Number.isNaN(value) ? 1 : value);
+            render();
+        });
+        qtyCell.appendChild(qty);
+        row.appendChild(qtyCell);
+
+        const removeCell = document.createElement('td');
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'btn secondary';
+        remove.textContent = 'Remove';
+        remove.addEventListener('click', () => {
+            removeItem(item.offerId);
+            render();
+        });
+        removeCell.appendChild(remove);
+        row.appendChild(removeCell);
+
+        return row;
+    }
+
+    function render(): void {
+        const cart = getCart();
+        const hasItems = cart.items.length > 0;
+        emptySection.hidden = hasItems;
+        filledSection.hidden = !hasItems;
+        if (!hasItems) return;
+
+        banner.textContent =
+            `All items in this order are fulfilled and charged by ${cart.manufacturerName} ` +
+            'as merchant of record. Items from other manufacturers need a separate order.';
+
+        tbody.replaceChildren(...cart.items.map((_, index) => renderRow(cart, index)));
+    }
+
+    render();
+    window.addEventListener('storage', render);
+</script>
