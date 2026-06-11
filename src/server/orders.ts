@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { findOfferById, loadCatalog } from '../catalog/load.ts';
 import type { Catalog } from '../catalog/schema.ts';
 import { expandShipsTo } from '../lib/regions.ts';
+import { COMMITMENT_VERSION, computeCommitmentHash, generateContactSalt } from './commitment.ts';
 import { getDb } from './db.ts';
 import {
   accessTokenMatches,
@@ -116,9 +117,52 @@ export function createOrder(input: OrderInput, options: Options = {}): CreatedOr
     ? resolved.reduce((sum, { offer, quantity }) => sum + offer.price!.amount * quantity, 0)
     : null;
 
+  // DAO fees, frozen from the governed catalog config at order time.
+  // Only percent-of-gross is computable today; other/absent types accrue 0.
+  const priced = resolved.map((entry) => {
+    const { offer, quantity } = entry;
+    const daoFeeBps =
+      offer.daoFee?.type === 'percent-of-gross' && offer.daoFee.percent !== undefined
+        ? Math.round(offer.daoFee.percent * 100)
+        : 0;
+    const daoFeeMinor =
+      offer.price && daoFeeBps > 0
+        ? Math.round((offer.price.amount * quantity * daoFeeBps) / 10000)
+        : 0;
+    return { ...entry, daoFeeBps, daoFeeMinor };
+  });
+  const daoFeeMinor = fullyPriced
+    ? priced.reduce((sum, item) => sum + item.daoFeeMinor, 0)
+    : null;
+  const daoFeeStatus = daoFeeMinor !== null && daoFeeMinor > 0 ? 'pending' : 'none';
+
   const id = orderId();
   const accessToken = generateAccessToken();
   const now = new Date().toISOString();
+
+  const contactSalt = generateContactSalt();
+  const commitmentHash = computeCommitmentHash(
+    {
+      orderId: id,
+      createdAt: now,
+      manufacturerId,
+      checkoutGroupId,
+      catalogRef: catalog.manifest.resolvedSha,
+      shipCountry: country,
+      currency,
+      subtotalMinor,
+      daoFeeMinor,
+      items: priced.map(({ product, offer, quantity, daoFeeBps }) => ({
+        productId: product.id,
+        offerId: offer.id,
+        quantity,
+        unitPriceMinor: offer.price?.amount ?? null,
+        daoFeeBps,
+      })),
+    },
+    input.customer,
+    contactSalt,
+  );
 
   db.exec('BEGIN');
   try {
@@ -126,8 +170,9 @@ export function createOrder(input: OrderInput, options: Options = {}): CreatedOr
       `INSERT INTO orders (
         id, created_at, status, manufacturer_id, checkout_group_id, catalog_ref,
         ship_country, payment_mode, payment_status, currency, subtotal_minor,
-        access_token_hash, customer_notes
-      ) VALUES (?, ?, 'received', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
+        dao_fee_minor, dao_fee_status, commitment_hash, commitment_version,
+        contact_salt, access_token_hash, customer_notes
+      ) VALUES (?, ?, 'received', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       now,
@@ -138,6 +183,11 @@ export function createOrder(input: OrderInput, options: Options = {}): CreatedOr
       paymentMode,
       currency,
       subtotalMinor,
+      daoFeeMinor,
+      daoFeeStatus,
+      commitmentHash,
+      COMMITMENT_VERSION,
+      contactSalt,
       hashAccessToken(accessToken),
       input.customerNotes ?? null,
     );
@@ -145,10 +195,10 @@ export function createOrder(input: OrderInput, options: Options = {}): CreatedOr
     const insertItem = db.prepare(
       `INSERT INTO order_items (
         id, order_id, product_id, offer_id, quantity, unit_price_minor,
-        price_display, name_snapshot
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        dao_fee_bps, dao_fee_minor, price_display, name_snapshot
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
-    for (const { product, offer, quantity } of resolved) {
+    for (const { product, offer, quantity, daoFeeBps, daoFeeMinor: itemFee } of priced) {
       insertItem.run(
         orderItemId(),
         id,
@@ -156,6 +206,8 @@ export function createOrder(input: OrderInput, options: Options = {}): CreatedOr
         offer.id,
         quantity,
         offer.price?.amount ?? null,
+        daoFeeBps,
+        itemFee,
         offer.priceDisplay ?? 'TBD',
         product.name,
       );
@@ -215,6 +267,11 @@ export interface OrderRecord {
   payment_status: string;
   currency: string | null;
   subtotal_minor: number | null;
+  dao_fee_minor: number | null;
+  dao_fee_status: string;
+  dao_fee_reference: string | null;
+  commitment_hash: string | null;
+  commitment_version: number | null;
   customer_notes: string | null;
 }
 
@@ -223,6 +280,8 @@ export interface OrderItemRecord {
   offer_id: string;
   quantity: number;
   unit_price_minor: number | null;
+  dao_fee_bps: number | null;
+  dao_fee_minor: number | null;
   price_display: string;
   name_snapshot: string;
 }
@@ -262,13 +321,16 @@ export function getOrderForConfirmation(
 
   const items = db
     .prepare(
-      'SELECT product_id, offer_id, quantity, unit_price_minor, price_display, name_snapshot FROM order_items WHERE order_id = ?',
+      'SELECT product_id, offer_id, quantity, unit_price_minor, dao_fee_bps, dao_fee_minor, price_display, name_snapshot FROM order_items WHERE order_id = ?',
     )
     .all(id) as unknown as OrderItemRecord[];
   const contact = db
     .prepare('SELECT * FROM order_contacts WHERE order_id = ?')
     .get(id) as unknown as OrderContactRecord;
 
-  const { access_token_hash: _hash, ...order } = row;
+  // Server-private columns never leave this module.
+  const { access_token_hash: _hash, contact_salt: _salt, ...order } = row as typeof row & {
+    contact_salt: string | null;
+  };
   return { order, items, contact };
 }

@@ -100,6 +100,7 @@ export const OfferSchema = z.looseObject({
   daoFee: z
     .looseObject({
       type: z.string(),
+      percent: z.number().nonnegative().optional(),
       includedInPrice: z.boolean().optional(),
       remittance: z.string().optional(),
       publicLabel: z.string().optional(),

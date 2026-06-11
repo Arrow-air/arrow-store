@@ -20,6 +20,8 @@ export const ORDER_STATUSES = [
 
 export const PAYMENT_STATUSES = ['pending', 'paid', 'refunded', 'cancelled'] as const;
 
+export const DAO_FEE_STATUSES = ['none', 'pending', 'remitted'] as const;
+
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
@@ -94,10 +96,13 @@ export function getAdminOrder(
     | undefined;
   if (!order || !canAccessOrder(user, order)) return null;
 
-  const { access_token_hash: _hash, ...safeOrder } = order;
+  // Server-private columns never leave this module.
+  const { access_token_hash: _hash, contact_salt: _salt, ...safeOrder } = order as typeof order & {
+    contact_salt: string | null;
+  };
   const items = db
     .prepare(
-      'SELECT product_id, offer_id, quantity, unit_price_minor, price_display, name_snapshot FROM order_items WHERE order_id = ?',
+      'SELECT product_id, offer_id, quantity, unit_price_minor, dao_fee_bps, dao_fee_minor, price_display, name_snapshot FROM order_items WHERE order_id = ?',
     )
     .all(id) as unknown as OrderItemRecord[];
   const contact = db
@@ -112,11 +117,48 @@ export function getAdminOrder(
   return { order: safeOrder, items, contact, events };
 }
 
+export interface FeeReconciliationRow {
+  id: string;
+  created_at: string;
+  manufacturer_id: string;
+  payment_status: string;
+  currency: string | null;
+  subtotal_minor: number | null;
+  dao_fee_minor: number | null;
+  dao_fee_status: string;
+  dao_fee_reference: string | null;
+  commitment_hash: string | null;
+}
+
+/**
+ * Fee reconciliation rows for the given user (deliberately PII-free — this
+ * is the view a dao-finance role would eventually get).
+ */
+export function listFeeReconciliation(
+  user: AdminUser,
+  options: Options = {},
+): FeeReconciliationRow[] {
+  const db = options.db ?? getDb();
+  const scope = user.role === 'store-admin' ? '' : 'WHERE manufacturer_id = ?';
+  const params = user.role === 'store-admin' ? [] : [user.manufacturerId];
+  return db
+    .prepare(
+      `SELECT id, created_at, manufacturer_id, payment_status, currency, subtotal_minor,
+        dao_fee_minor, dao_fee_status, dao_fee_reference, commitment_hash
+        FROM orders
+        ${scope}
+        ORDER BY created_at DESC`,
+    )
+    .all(...params) as unknown as FeeReconciliationRow[];
+}
+
 export interface OrderUpdate {
   status?: string;
   paymentStatus?: string;
   paymentReference?: string;
   trackingNumber?: string;
+  daoFeeStatus?: string;
+  daoFeeReference?: string;
   note?: string;
 }
 
@@ -149,6 +191,12 @@ export function applyOrderUpdate(
   ) {
     throw new OrderUpdateError(`invalid payment status: ${update.paymentStatus}`);
   }
+  if (
+    update.daoFeeStatus !== undefined &&
+    !DAO_FEE_STATUSES.includes(update.daoFeeStatus as (typeof DAO_FEE_STATUSES)[number])
+  ) {
+    throw new OrderUpdateError(`invalid dao fee status: ${update.daoFeeStatus}`);
+  }
 
   const changes: Array<{ eventType: string; column: string; from: unknown; to: string }> = [];
   if (update.status !== undefined && update.status !== order.status) {
@@ -179,6 +227,25 @@ export function applyOrderUpdate(
       column: 'tracking_number',
       from: order.tracking_number,
       to: update.trackingNumber,
+    });
+  }
+  if (update.daoFeeStatus !== undefined && update.daoFeeStatus !== order.dao_fee_status) {
+    changes.push({
+      eventType: 'dao-fee-status-changed',
+      column: 'dao_fee_status',
+      from: order.dao_fee_status,
+      to: update.daoFeeStatus,
+    });
+  }
+  if (
+    update.daoFeeReference !== undefined &&
+    update.daoFeeReference !== (order.dao_fee_reference ?? '')
+  ) {
+    changes.push({
+      eventType: 'dao-fee-reference-updated',
+      column: 'dao_fee_reference',
+      from: order.dao_fee_reference,
+      to: update.daoFeeReference,
     });
   }
 

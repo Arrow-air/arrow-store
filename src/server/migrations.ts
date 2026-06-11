@@ -107,4 +107,21 @@ export const MIGRATIONS: Migration[] = [
       ALTER TABLE orders ADD COLUMN tracking_number TEXT;
     `,
   },
+  {
+    id: '0003_dao_fees',
+    // DAO fee tracking (roadmap Phase 4). Fees are computed from the catalog
+    // daoFee config at order time and frozen (basis points + minor units per
+    // item, total on the order). contact_salt feeds the order commitment
+    // hash: PII enters the hash only as sha256(salt || canonical contact),
+    // so the hash can someday be published without exposing the customer.
+    sql: `
+      ALTER TABLE order_items ADD COLUMN dao_fee_bps INTEGER;
+      ALTER TABLE order_items ADD COLUMN dao_fee_minor INTEGER;
+      ALTER TABLE orders ADD COLUMN dao_fee_minor INTEGER;
+      ALTER TABLE orders ADD COLUMN dao_fee_status TEXT NOT NULL DEFAULT 'none'
+        CHECK (dao_fee_status IN ('none', 'pending', 'remitted'));
+      ALTER TABLE orders ADD COLUMN dao_fee_reference TEXT;
+      ALTER TABLE orders ADD COLUMN contact_salt TEXT;
+    `,
+  },
 ];
