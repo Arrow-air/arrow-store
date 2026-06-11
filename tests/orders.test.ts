@@ -77,7 +77,8 @@ const catalog: Catalog = {
           checkoutGroupId: 'thomas-store',
           status: 'limited-availability',
           shipsTo: ['US'],
-          priceDisplay: 'TBD',
+          priceDisplay: '$4,900 USD',
+          price: { amount: 490000, currency: 'USD' },
           checkout: { mode: 'manufacturer-site', ctaLabel: 'Buy', immediatePayment: true },
         },
         {
@@ -189,6 +190,35 @@ describe('createOrder', () => {
       .all(created.orderId) as Array<Record<string, unknown>>;
     expect(events).toHaveLength(1);
     expect(events[0]!.event_type).toBe('order-created');
+  });
+
+  it('stores machine prices and the subtotal when the catalog provides them', () => {
+    const created = createOrder(
+      makeInput({ items: [{ offerId: 'quiver-devkit-thomas-texas', quantity: 2 }] }),
+      { db, catalog },
+    );
+    const order = db
+      .prepare('SELECT currency, subtotal_minor FROM orders WHERE id = ?')
+      .get(created.orderId) as { currency: string | null; subtotal_minor: number | null };
+    expect(order).toEqual({ currency: 'USD', subtotal_minor: 980000 });
+    const item = db
+      .prepare('SELECT unit_price_minor FROM order_items WHERE order_id = ?')
+      .get(created.orderId) as { unit_price_minor: number | null };
+    expect(item.unit_price_minor).toBe(490000);
+  });
+
+  it('leaves totals null when an offer has no machine price', () => {
+    const created = createOrder(
+      makeInput({
+        items: [{ offerId: 'quiver-devkit-julius-germany', quantity: 1 }],
+        customer: { ...customer, country: 'DE' },
+      }),
+      { db, catalog },
+    );
+    const order = db
+      .prepare('SELECT currency, subtotal_minor FROM orders WHERE id = ?')
+      .get(created.orderId) as { currency: string | null; subtotal_minor: number | null };
+    expect(order).toEqual({ currency: null, subtotal_minor: null });
   });
 
   it('keeps PII out of the orders row and audit events', () => {

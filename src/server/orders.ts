@@ -94,11 +94,27 @@ export function createOrder(input: OrderInput, options: Options = {}): CreatedOr
     }
   }
 
-  // V1 handoff: an external checkout link when the catalog provides one,
-  // otherwise the manufacturer follows up with an invoice.
-  const paymentMode = resolved.some(({ offer }) => offer.checkout.url)
-    ? 'manufacturer-site'
-    : 'manual-invoice';
+  // Payment handoff: a manufacturer checkout endpoint (handoff convention)
+  // or per-offer checkout link when the catalog provides one, otherwise the
+  // manufacturer follows up with an invoice.
+  const group = catalog.checkoutGroups.find((candidate) => candidate.id === checkoutGroupId);
+  const hasHandoff = group?.mode === 'external-cart' && Boolean(group.baseUrl);
+  const paymentMode =
+    hasHandoff || resolved.some(({ offer }) => offer.checkout.url)
+      ? 'manufacturer-site'
+      : 'manual-invoice';
+
+  // Machine-readable totals when every offer carries a catalog price in one
+  // currency (nullable until the catalog provides prices — Phase 4 commitment
+  // hashes consume these).
+  const currencies = new Set(
+    resolved.map(({ offer }) => offer.price?.currency).filter(Boolean),
+  );
+  const fullyPriced = resolved.every(({ offer }) => offer.price) && currencies.size === 1;
+  const currency = fullyPriced ? [...currencies][0]! : null;
+  const subtotalMinor = fullyPriced
+    ? resolved.reduce((sum, { offer, quantity }) => sum + offer.price!.amount * quantity, 0)
+    : null;
 
   const id = orderId();
   const accessToken = generateAccessToken();
@@ -109,8 +125,9 @@ export function createOrder(input: OrderInput, options: Options = {}): CreatedOr
     db.prepare(
       `INSERT INTO orders (
         id, created_at, status, manufacturer_id, checkout_group_id, catalog_ref,
-        ship_country, payment_mode, payment_status, access_token_hash, customer_notes
-      ) VALUES (?, ?, 'received', ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+        ship_country, payment_mode, payment_status, currency, subtotal_minor,
+        access_token_hash, customer_notes
+      ) VALUES (?, ?, 'received', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
     ).run(
       id,
       now,
@@ -119,14 +136,17 @@ export function createOrder(input: OrderInput, options: Options = {}): CreatedOr
       catalog.manifest.resolvedSha,
       country,
       paymentMode,
+      currency,
+      subtotalMinor,
       hashAccessToken(accessToken),
       input.customerNotes ?? null,
     );
 
     const insertItem = db.prepare(
       `INSERT INTO order_items (
-        id, order_id, product_id, offer_id, quantity, price_display, name_snapshot
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        id, order_id, product_id, offer_id, quantity, unit_price_minor,
+        price_display, name_snapshot
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     for (const { product, offer, quantity } of resolved) {
       insertItem.run(
@@ -135,6 +155,7 @@ export function createOrder(input: OrderInput, options: Options = {}): CreatedOr
         product.id,
         offer.id,
         quantity,
+        offer.price?.amount ?? null,
         offer.priceDisplay ?? 'TBD',
         product.name,
       );
@@ -192,6 +213,8 @@ export interface OrderRecord {
   ship_country: string;
   payment_mode: string;
   payment_status: string;
+  currency: string | null;
+  subtotal_minor: number | null;
   customer_notes: string | null;
 }
 
@@ -199,6 +222,7 @@ export interface OrderItemRecord {
   product_id: string;
   offer_id: string;
   quantity: number;
+  unit_price_minor: number | null;
   price_display: string;
   name_snapshot: string;
 }
@@ -238,7 +262,7 @@ export function getOrderForConfirmation(
 
   const items = db
     .prepare(
-      'SELECT product_id, offer_id, quantity, price_display, name_snapshot FROM order_items WHERE order_id = ?',
+      'SELECT product_id, offer_id, quantity, unit_price_minor, price_display, name_snapshot FROM order_items WHERE order_id = ?',
     )
     .all(id) as unknown as OrderItemRecord[];
   const contact = db

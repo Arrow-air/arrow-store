@@ -12,9 +12,12 @@ devkits
 DOESNOTEXIST
 gitignore
 Grotesk
+HFGK
+KTSY
 maxlength
 novalidate
 nvmrc
+PEBGX
 prerender
 prerendering
 propellers
