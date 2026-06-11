@@ -57,6 +57,18 @@ merchant of record). The client cart refuses to mix groups; the server re-valida
 plus offer existence, orderable status, and ship-country eligibility on every intake —
 client data is never trusted for prices or IDs.
 
+## Deferred: per-offer stock counters
+
+Inventory is a coarse, catalog-governed status switch (`available` / `out-of-stock` /
+...), updated by PR — no quantities anywhere, by design. If reconciling oversells ever
+costs real time, the planned fix is a **store-side stock counter**: a per-offer count in
+the private DB, editable from the manufacturer admin, decremented on each order, gating
+add-to-cart and intake the moment it hits zero (no PR, no redeploy). A shelf count is
+manufacturer ops data, like tracking numbers — the catalog stays the authority on
+whether an offer exists and at what price. Other frontends and the checkout adapter
+would not see the store's counter; the handoff convention would want an optional
+manufacturer stock endpoint at that point.
+
 ## Hosting constraint
 
 SQLite implies a persistent-disk host (VPS / Fly / Render style), not serverless.
