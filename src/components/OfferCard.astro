@@ -22,6 +22,9 @@ const merchantName = displayValue(
     offer.merchantOfRecordName,
     displayValue(manufacturer.merchantOfRecord.legalName, manufacturer.displayName),
 );
+// Fee transparency: show the governed DAO fee label once it's a real value.
+const daoFeeLabel =
+    offer.daoFee && offer.daoFee.type !== 'tbd' ? offer.daoFee.publicLabel : undefined;
 
 const snapshot: OfferSnapshot = {
     productId: product.id,
@@ -56,6 +59,7 @@ const snapshot: OfferSnapshot = {
     <p class="meta small">
         Sold and charged by <strong>{merchantName}</strong> as merchant of record.
     </p>
+    {daoFeeLabel && <p class="meta small">{daoFeeLabel}</p>}
     {
         orderable ? (
             <button class="btn" type="button" data-offer={JSON.stringify(snapshot)}>

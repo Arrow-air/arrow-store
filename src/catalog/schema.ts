@@ -89,6 +89,14 @@ export const OfferSchema = z.looseObject({
   paymentMethods: z.array(z.string()).optional(),
   checkout: OfferCheckoutSchema,
   merchantOfRecordName: z.string().optional(),
+  daoFee: z
+    .looseObject({
+      type: z.string(),
+      includedInPrice: z.boolean().optional(),
+      remittance: z.string().optional(),
+      publicLabel: z.string().optional(),
+    })
+    .optional(),
   notes: z.string().optional(),
 });
 
