@@ -25,9 +25,15 @@ const manufacturerName = manufacturer?.displayName ?? order.manufacturer_id;
 // per-offer checkout link, otherwise invoice instructions.
 const checkoutGroup = getCheckoutGroup(order.checkout_group_id, catalog);
 const handoffItems = items.map((item) => ({ offerId: item.offer_id, quantity: item.quantity }));
+// Return URLs derive from the request origin, so localhost dev and production
+// both send customers back to the right place (origin-allowlisted endpoint-side).
+const returnUrls = {
+    returnUrl: new URL('/orders/payment-complete', Astro.url.origin).toString(),
+    cancelUrl: new URL('/', Astro.url.origin).toString(),
+};
 const handoffUrl =
     checkoutGroup?.mode === 'external-cart' && checkoutGroup.baseUrl
-        ? buildCheckoutHandoffUrl(checkoutGroup.baseUrl, handoffItems, order.id)
+        ? buildCheckoutHandoffUrl(checkoutGroup.baseUrl, handoffItems, order.id, returnUrls)
         : undefined;
 const payUrl =
     handoffUrl ??

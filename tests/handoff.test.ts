@@ -20,6 +20,25 @@ describe('buildCheckoutHandoffUrl', () => {
     );
   });
 
+  it('passes frontend return and cancel URLs when provided', () => {
+    const url = new URL(
+      buildCheckoutHandoffUrl('https://checkout.example/checkout', [{ offerId: 'a', quantity: 1 }], 'ord_X', {
+        returnUrl: 'http://localhost:4321/orders/payment-complete',
+        cancelUrl: 'http://localhost:4321/',
+      }),
+    );
+    expect(url.searchParams.get('return')).toBe('http://localhost:4321/orders/payment-complete');
+    expect(url.searchParams.get('cancel')).toBe('http://localhost:4321/');
+  });
+
+  it('omits return params when not provided', () => {
+    const url = new URL(
+      buildCheckoutHandoffUrl('https://checkout.example/checkout', [{ offerId: 'a', quantity: 1 }], 'ord_X'),
+    );
+    expect(url.searchParams.has('return')).toBe(false);
+    expect(url.searchParams.has('cancel')).toBe(false);
+  });
+
   it('preserves existing query parameters on the base URL', () => {
     const url = new URL(
       buildCheckoutHandoffUrl('https://example.com/checkout?env=test', [{ offerId: 'a', quantity: 1 }], 'r'),
