@@ -89,6 +89,14 @@ export const OfferSchema = z.looseObject({
   paymentMethods: z.array(z.string()).optional(),
   checkout: OfferCheckoutSchema,
   merchantOfRecordName: z.string().optional(),
+  // Machine-readable unit price in minor units; required for the automated
+  // checkout handoff (arrow-catalog docs/checkout-handoff.md).
+  price: z
+    .strictObject({
+      amount: z.number().int().positive(),
+      currency: z.string().regex(/^[A-Z]{3}$/),
+    })
+    .optional(),
   daoFee: z
     .looseObject({
       type: z.string(),

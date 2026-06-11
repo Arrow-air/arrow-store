@@ -1,0 +1,28 @@
+---
+import Base from '../../layouts/Base.astro';
+---
+
+<Base title="Payment received">
+    <h1>Payment received — thank you!</h1>
+    <p>
+        Your payment went directly to the manufacturer as merchant of record. They will
+        confirm it against your order
+        <strong data-order-ref></strong>
+        and follow up by email with build and shipping updates.
+    </p>
+    <p class="muted small">
+        Keep your order confirmation link for reference. If anything looks off, reply to the
+        manufacturer's confirmation email.
+    </p>
+    <a class="btn secondary" href="/">Back to the store</a>
+</Base>
+
+<script>
+    // The ref is display-only (it is not proof of payment; manufacturers verify
+    // payments in their own payment account before updating the order).
+    const ref = new URLSearchParams(window.location.search).get('ref');
+    const target = document.querySelector<HTMLElement>('[data-order-ref]');
+    if (target && ref && /^[A-Za-z0-9_-]{1,64}$/.test(ref)) {
+        target.textContent = ref;
+    }
+</script>

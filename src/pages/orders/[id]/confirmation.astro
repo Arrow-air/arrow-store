@@ -1,6 +1,7 @@
 ---
-import { findOfferById, getManufacturer, loadCatalog } from '../../../catalog/load';
+import { findOfferById, getCheckoutGroup, getManufacturer, loadCatalog } from '../../../catalog/load';
 import Base from '../../../layouts/Base.astro';
+import { buildCheckoutHandoffUrl } from '../../../lib/handoff';
 import { countryName } from '../../../lib/regions';
 import { getOrderForConfirmation } from '../../../server/orders';
 
@@ -19,11 +20,27 @@ const catalog = loadCatalog();
 const manufacturer = getManufacturer(order.manufacturer_id, catalog);
 const manufacturerName = manufacturer?.displayName ?? order.manufacturer_id;
 
-// Payment handoff: an external checkout link when the catalog provides one,
-// otherwise the manufacturer follows up with invoice instructions.
-const checkoutUrl = items
-    .map((item) => findOfferById(item.offer_id, catalog)?.offer.checkout.url)
-    .find((url) => url !== undefined);
+// Payment handoff, in order of preference: the manufacturer's checkout
+// endpoint (handoff convention — one payment for the whole order), a
+// per-offer checkout link, otherwise invoice instructions.
+const checkoutGroup = getCheckoutGroup(order.checkout_group_id, catalog);
+const handoffItems = items.map((item) => ({ offerId: item.offer_id, quantity: item.quantity }));
+const handoffUrl =
+    checkoutGroup?.mode === 'external-cart' && checkoutGroup.baseUrl
+        ? buildCheckoutHandoffUrl(checkoutGroup.baseUrl, handoffItems, order.id)
+        : undefined;
+const payUrl =
+    handoffUrl ??
+    items
+        .map((item) => findOfferById(item.offer_id, catalog)?.offer.checkout.url)
+        .find((url) => url !== undefined);
+
+const totalFormat =
+    order.currency && new Intl.NumberFormat('en-US', { style: 'currency', currency: order.currency });
+const total =
+    order.subtotal_minor !== null && totalFormat
+        ? totalFormat.format(order.subtotal_minor / 100)
+        : undefined;
 
 const placedAt = new Date(order.created_at).toUTCString();
 ---
@@ -57,12 +74,17 @@ const placedAt = new Date(order.created_at).toUTCString();
     </table>
 
     <h2>Payment</h2>
+    {total && (
+        <p>
+            Order total: <strong>{total}</strong>
+        </p>
+    )}
     {
-        order.payment_mode === 'manufacturer-site' && checkoutUrl ? (
+        order.payment_mode === 'manufacturer-site' && payUrl ? (
             <p>
-                Complete your payment with the manufacturer:
-                <a class="btn" href={checkoutUrl}>
-                    Pay {manufacturerName}
+                One payment covers your whole order, charged by {manufacturerName}:
+                <a class="btn" href={payUrl}>
+                    Pay now{total ? ` — ${total}` : ''}
                 </a>
             </p>
         ) : (

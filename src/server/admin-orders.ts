@@ -97,7 +97,7 @@ export function getAdminOrder(
   const { access_token_hash: _hash, ...safeOrder } = order;
   const items = db
     .prepare(
-      'SELECT product_id, offer_id, quantity, price_display, name_snapshot FROM order_items WHERE order_id = ?',
+      'SELECT product_id, offer_id, quantity, unit_price_minor, price_display, name_snapshot FROM order_items WHERE order_id = ?',
     )
     .all(id) as unknown as OrderItemRecord[];
   const contact = db
