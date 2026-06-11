@@ -46,8 +46,19 @@ export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   'invoice': 'Invoice',
 };
 
+export const DAO_FEE_STATUS_LABELS: Record<string, string> = {
+  none: 'No fee',
+  pending: 'Owed',
+  remitted: 'Remitted',
+};
+
 export function statusLabel(status: string): string {
   return OFFER_STATUS_LABELS[status] ?? status;
+}
+
+/** Format minor units ("cents") in a currency, e.g. 98000 USD -> "$980.00". */
+export function formatMinor(amount: number, currency: string): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount / 100);
 }
 
 export function paymentMethodLabel(method: string): string {

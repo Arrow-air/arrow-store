@@ -1,0 +1,89 @@
+---
+import { getManufacturer } from '../../catalog/load';
+import AdminBar from '../../components/AdminBar.astro';
+import Base from '../../layouts/Base.astro';
+import { DAO_FEE_STATUS_LABELS, formatMinor } from '../../lib/display';
+import { listFeeReconciliation } from '../../server/admin-orders';
+
+export const prerender = false;
+
+const user = Astro.locals.adminUser!;
+const rows = listFeeReconciliation(user);
+
+function sumFees(status: string): number {
+    return rows
+        .filter((row) => row.dao_fee_status === status && row.dao_fee_minor !== null)
+        .reduce((sum, row) => sum + row.dao_fee_minor!, 0);
+}
+// Single-currency assumption holds while the catalog only prices in USD.
+const currency = rows.find((row) => row.currency)?.currency ?? 'USD';
+const owed = sumFees('pending');
+const remitted = sumFees('remitted');
+---
+
+<Base title="DAO fee reconciliation · Admin">
+    <AdminBar user={user} />
+    <h1>DAO fee reconciliation</h1>
+    <p class="muted">
+        Fees are computed from the governed catalog config at order time and frozen. Mark an
+        order's fee remitted from its detail page after paying the DAO.
+        <a href="/admin/reconciliation.csv">Download CSV</a>
+    </p>
+    <p>
+        <span class="badge payment-pending">Owed: {formatMinor(owed, currency)}</span>
+        <span class="badge paid">Remitted: {formatMinor(remitted, currency)}</span>
+    </p>
+    {rows.length === 0 && <p class="muted">No orders yet.</p>}
+    {
+        rows.length > 0 && (
+            <table class="cart-table">
+                <thead>
+                    <tr>
+                        <th>Order</th>
+                        <th>Placed</th>
+                        {user.role === 'store-admin' && <th>Manufacturer</th>}
+                        <th>Subtotal</th>
+                        <th>DAO fee</th>
+                        <th>Fee status</th>
+                        <th>Payment</th>
+                        <th>Reference</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map((row) => (
+                        <tr>
+                            <td>
+                                <a href={`/admin/orders/${row.id}`}>{row.id.slice(0, 14)}…</a>
+                            </td>
+                            <td>{row.created_at.slice(0, 10)}</td>
+                            {user.role === 'store-admin' && (
+                                <td>
+                                    {getManufacturer(row.manufacturer_id)?.displayName ??
+                                        row.manufacturer_id}
+                                </td>
+                            )}
+                            <td>
+                                {row.subtotal_minor !== null && row.currency
+                                    ? formatMinor(row.subtotal_minor, row.currency)
+                                    : '—'}
+                            </td>
+                            <td>
+                                {row.dao_fee_minor !== null && row.currency
+                                    ? formatMinor(row.dao_fee_minor, row.currency)
+                                    : '—'}
+                            </td>
+                            <td>
+                                <span class={`badge fee-${row.dao_fee_status}`}>
+                                    {DAO_FEE_STATUS_LABELS[row.dao_fee_status] ??
+                                        row.dao_fee_status}
+                                </span>
+                            </td>
+                            <td>{row.payment_status}</td>
+                            <td class="small muted">{row.dao_fee_reference ?? ''}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        )
+    }
+</Base>

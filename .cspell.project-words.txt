@@ -3,6 +3,7 @@ arrowair
 astro
 astrojs
 autofocus
+BVAZY
 cafebabe
 commitlint
 crockford
@@ -10,9 +11,11 @@ crossorigin
 devkit
 devkits
 DOESNOTEXIST
+frontends
 gitignore
 Grotesk
 HFGK
+Javelina
 KTSY
 maxlength
 novalidate
@@ -22,6 +25,7 @@ prerender
 prerendering
 propellers
 quiver
+remittance
 runbook
 sqlite
 subdirs

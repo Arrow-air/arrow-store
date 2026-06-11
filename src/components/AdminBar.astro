@@ -18,6 +18,10 @@ const scope =
         <span class="mono-label">Signed in</span>
         {user.displayName} · {scope}
     </span>
+    <nav class="admin-nav">
+        <a href="/admin">Orders</a>
+        <a href="/admin/reconciliation">DAO fees</a>
+    </nav>
     <form method="post" action="/admin/logout">
         <button class="btn secondary" type="submit">Sign out</button>
     </form>

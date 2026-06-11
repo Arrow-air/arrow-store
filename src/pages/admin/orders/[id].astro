@@ -2,10 +2,16 @@
 import { getManufacturer } from '../../../catalog/load';
 import AdminBar from '../../../components/AdminBar.astro';
 import Base from '../../../layouts/Base.astro';
-import { ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from '../../../lib/display';
+import {
+    DAO_FEE_STATUS_LABELS,
+    formatMinor,
+    ORDER_STATUS_LABELS,
+    PAYMENT_STATUS_LABELS,
+} from '../../../lib/display';
 import { countryName } from '../../../lib/regions';
 import {
     applyOrderUpdate,
+    DAO_FEE_STATUSES,
     getAdminOrder,
     ORDER_STATUSES,
     OrderUpdateError,
@@ -33,6 +39,8 @@ if (Astro.request.method === 'POST' && id) {
                 paymentStatus: field('paymentStatus') || undefined,
                 paymentReference: field('paymentReference'),
                 trackingNumber: field('trackingNumber'),
+                daoFeeStatus: field('daoFeeStatus') || undefined,
+                daoFeeReference: field('daoFeeReference'),
                 note: field('note'),
             },
             user,
@@ -74,6 +82,10 @@ function eventLine(eventType: string, data: EventData): string {
             return `Payment reference set to "${data.to}"`;
         case 'tracking-updated':
             return `Tracking number set to "${data.to}"`;
+        case 'dao-fee-status-changed':
+            return `DAO fee: ${data.from ?? '—'} → ${data.to}`;
+        case 'dao-fee-reference-updated':
+            return `DAO fee reference set to "${data.to}"`;
         case 'note-added':
             return `Note: ${data.note}`;
         default:
@@ -98,7 +110,24 @@ function eventLine(eventType: string, data: EventData): string {
     </div>
     <p class="muted small">
         Placed {new Date(order.created_at).toUTCString()} · payment mode {order.payment_mode}
+        {
+            order.subtotal_minor !== null && order.currency && (
+                <>
+                    {' '}· subtotal {formatMinor(order.subtotal_minor, order.currency)}
+                    {order.dao_fee_minor !== null &&
+                        ` · DAO fee ${formatMinor(order.dao_fee_minor, order.currency)} (${DAO_FEE_STATUS_LABELS[order.dao_fee_status] ?? order.dao_fee_status})`}
+                </>
+            )
+        }
     </p>
+    {
+        order.commitment_hash && (
+            <p class="muted small">
+                Commitment hash (v{order.commitment_version}):{' '}
+                <code>{order.commitment_hash}</code>
+            </p>
+        )
+    }
 
     {message && <p class="banner">{message}</p>}
     {error && <p class="error-text">{error}</p>}
@@ -184,6 +213,27 @@ function eventLine(eventType: string, data: EventData): string {
                         value={order.tracking_number ?? ''}
                     />
                 </label>
+                <div class="field-row">
+                    <label>
+                        DAO fee status
+                        <select name="daoFeeStatus">
+                            {DAO_FEE_STATUSES.map((status) => (
+                                <option value={status} selected={status === order.dao_fee_status}>
+                                    {DAO_FEE_STATUS_LABELS[status]}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    <label>
+                        DAO fee reference
+                        <input
+                            name="daoFeeReference"
+                            maxlength="200"
+                            value={order.dao_fee_reference ?? ''}
+                            placeholder="remittance tx / receipt"
+                        />
+                    </label>
+                </div>
                 <label>
                     Add a note (kept in the audit log)
                     <textarea name="note" rows="2" maxlength="2000"></textarea>
