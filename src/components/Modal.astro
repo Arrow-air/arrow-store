@@ -1,0 +1,79 @@
+---
+// A generic modal dialog, hidden by default, toggled with data attributes.
+// Use the client-side script to show/hide modals by ID.
+interface Props {
+  id: string;
+  title: string;
+}
+
+const { id, title } = Astro.props;
+---
+
+<div class="modal-overlay" data-modal={id} hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby={`${id}-title`}>
+    <div class="modal-header">
+      <h3 id={`${id}-title`}>{title}</h3>
+      <button class="btn secondary modal-close" data-modal-close={id} type="button" aria-label="Close">
+        ✕
+      </button>
+    </div>
+    <div class="modal-body">
+      <slot />
+    </div>
+  </div>
+</div>
+
+<style>
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .modal {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    max-width: 28rem;
+    width: 100%;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modal-header h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .modal-close {
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    padding: 0.25rem;
+    cursor: pointer;
+  }
+
+  .modal-close:hover {
+    color: var(--text);
+  }
+
+  .modal-body {
+    padding: 1.25rem;
+  }
+
+  [data-theme="dark"] .modal-overlay {
+    background: rgba(0, 0, 0, 0.7);
+  }
+</style>

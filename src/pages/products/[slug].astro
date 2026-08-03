@@ -9,6 +9,7 @@ import {
 import OfferCard from '../../components/OfferCard.astro';
 import ProductCard from '../../components/ProductCard.astro';
 import StatusBadge from '../../components/StatusBadge.astro';
+import Modal from '../../components/Modal.astro';
 import Base from '../../layouts/Base.astro';
 import { LIFECYCLE_STAGE_LABELS } from '../../lib/display';
 
@@ -45,23 +46,32 @@ const lineItemSections = [
         <p>{product.shortDescription}</p>
     </section>
 
-    <h2>Choose your manufacturer</h2>
-    <p class="muted">
-        Pick the offer for your region. Your whole order is fulfilled and charged by the
-        manufacturer you choose here.
-    </p>
-    <div class="grid">
-        {
-            offers.map((offer) => (
-                <OfferCard
-                    product={product}
-                    offer={offer}
-                    manufacturer={getManufacturer(offer.manufacturerId, catalog)!}
-                    catalogRef={catalog.manifest.resolvedSha}
-                />
-            ))
-        }
-    </div>
+    <section class="routing-info">
+        <h2>Choose your manufacturer</h2>
+        <p class="muted">
+            Your order is fulfilled and charged by the manufacturer you choose. The store
+            routes you to the nearest manufacturer by default — you can change it below.
+        </p>
+        <div class="grid">
+            {
+                offers.map((offer, index) => {
+                    const manufacturer = getManufacturer(offer.manufacturerId, catalog)!;
+                    const isNearest = index === 0;
+                    return (
+                        <div class="offer-wrapper">
+                            {isNearest && <span class="badge neutral">Nearest manufacturer</span>}
+                            <OfferCard
+                                product={product}
+                                offer={offer}
+                                manufacturer={manufacturer}
+                                catalogRef={catalog.manifest.resolvedSha}
+                            />
+                        </div>
+                    );
+                })
+            }
+        </div>
+    </section>
 
     {
         lineItemSections.map((section) => (
@@ -99,6 +109,33 @@ const lineItemSections = [
         )
     }
 
+    <section class="manufacturer-section">
+        <h2>Who builds it</h2>
+        <p class="muted">
+            Each manufacturer builds and ships the product directly. The store connects you
+            with the one that serves your region.
+        </p>
+        <div class="grid">
+            {
+                offers.map((offer) => {
+                    const manufacturer = getManufacturer(offer.manufacturerId, catalog)!;
+                    return (
+                        <article class="card manufacturer-card">
+                            <h3>{manufacturer.displayName}</h3>
+                            {manufacturer.description && <p class="meta">{manufacturer.description}</p>}
+                            {manufacturer.supportEmail && (
+                                <p class="meta small">
+                                    Contact: <a href={`mailto:${manufacturer.supportEmail}`}>{manufacturer.supportEmail}</a>
+                                </p>
+                            )}
+                            {offer.regionLabel && <span class="chip">{offer.regionLabel}</span>}
+                        </article>
+                    );
+                })
+            }
+        </div>
+    </section>
+
     {
         addOns.length > 0 && (
             <section>
@@ -123,6 +160,11 @@ const lineItemSections = [
             <li><a href={`/policies/${product.warrantyPolicyId}`}>Warranty policy</a></li>
         </ul>
     </section>
+
+    <Modal id="group-conflict-modal" title="Different manufacturer">
+        <p></p>
+        <div class="modal-actions" style="display: flex; gap: 0.5rem; margin-top: 1rem;"></div>
+    </Modal>
 </Base>
 
 <script>
@@ -133,15 +175,51 @@ const lineItemSections = [
             const snapshot = JSON.parse(button.dataset.offer!) as OfferSnapshot;
             const result = addItem(snapshot);
             if (!result.ok) {
-                const replace = window.confirm(
-                    `Your cart contains items from ${result.currentManufacturerName}. ` +
-                        'Each order is fulfilled and charged by a single manufacturer, so this ' +
-                        'item needs a separate order.\n\n' +
-                        'OK: empty the cart and start a new one with this item.\n' +
-                        'Cancel: keep your current cart.',
-                );
-                if (!replace) return;
-                startNewCartWith(snapshot);
+                // Show the group-conflict modal instead of window.confirm
+                const modalOverlay = document.getElementById('group-conflict-modal');
+                const modalBody = modalOverlay?.querySelector('.modal-body');
+                if (modalOverlay && modalBody) {
+                    modalBody.textContent = `Your cart contains items from ${
+                        result.currentManufacturerName
+                    }. Each order is fulfilled and charged by a single manufacturer, so this item needs a separate order.`;
+                    modalOverlay.hidden = false;
+
+                    const confirmBtn = document.createElement('button');
+                    confirmBtn.className = 'btn';
+                    confirmBtn.textContent = 'Empty cart and start new order';
+                    confirmBtn.addEventListener('click', () => {
+                        startNewCartWith(snapshot);
+                        modalOverlay.hidden = true;
+                        const original = button.textContent;
+                        button.textContent = 'Added to cart ✓';
+                        button.disabled = true;
+                        window.setTimeout(() => {
+                            button.textContent = original;
+                            button.disabled = false;
+                        }, 1200);
+                    });
+
+                    const cancelBtn = document.createElement('button');
+                    cancelBtn.className = 'btn secondary';
+                    cancelBtn.textContent = 'Keep current cart';
+                    cancelBtn.addEventListener('click', () => {
+                        modalOverlay.hidden = true;
+                    });
+
+                    // Clear previous buttons and append
+                    const actions = modalBody.querySelector('.modal-actions');
+                    if (actions) {
+                        actions.replaceChildren(confirmBtn, cancelBtn);
+                    } else {
+                        const actionsDiv = document.createElement('div');
+                        actionsDiv.className = 'modal-actions';
+                        actionsDiv.style.cssText = 'display: flex; gap: 0.5rem; margin-top: 1rem;';
+                        actionsDiv.appendChild(cancelBtn);
+                        actionsDiv.appendChild(confirmBtn);
+                        modalBody.appendChild(actionsDiv);
+                    }
+                    return;
+                }
             }
             const original = button.textContent;
             button.textContent = 'Added to cart ✓';
@@ -152,4 +230,13 @@ const lineItemSections = [
             }, 1200);
         });
     }
+
+    // Close modal on overlay click
+    document.addEventListener('click', (event) => {
+        const target = event.target as HTMLElement;
+        if (target.classList.contains('modal-overlay') || target.closest('[data-modal-close]')) {
+            const modal = target.closest('[data-modal]') as HTMLElement;
+            if (modal) modal.hidden = true;
+        }
+    });
 </script>

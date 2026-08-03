@@ -34,6 +34,7 @@ export interface OrderInput {
   items: Array<{ offerId: string; quantity: number }>;
   customer: CustomerInput;
   customerNotes?: string;
+  paymentMethod?: 'card' | 'usdc';
 }
 
 export interface CreatedOrder {
@@ -243,6 +244,7 @@ export function createOrder(input: OrderInput, options: Options = {}): CreatedOr
         checkoutGroupId,
         itemCount: resolved.length,
         catalogRef: catalog.manifest.resolvedSha,
+        paymentMethod: input.paymentMethod ?? 'card',
       }),
     );
 

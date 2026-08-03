@@ -12,6 +12,10 @@ import Base from '../layouts/Base.astro';
 
     <section data-cart-filled hidden>
         <p class="banner" data-cart-banner></p>
+        <div class="manufacturer-badge" data-manufacturer-badge hidden>
+            <span class="chip">Manufacturer</span>
+            <span data-manufacturer-name></span>
+        </div>
         <table class="cart-table">
             <thead>
                 <tr>
@@ -40,6 +44,8 @@ import Base from '../layouts/Base.astro';
     const filledSection = document.querySelector<HTMLElement>('[data-cart-filled]')!;
     const banner = document.querySelector<HTMLElement>('[data-cart-banner]')!;
     const tbody = document.querySelector<HTMLElement>('[data-cart-items]')!;
+    const manufacturerBadge = document.querySelector<HTMLElement>('[data-manufacturer-badge]')!;
+    const manufacturerName = document.querySelector<HTMLElement>('[data-manufacturer-name]')!;
 
     function renderRow(cart: CartState, index: number): HTMLTableRowElement {
         const item = cart.items[index]!;
@@ -93,9 +99,32 @@ import Base from '../layouts/Base.astro';
             `All items in this order are fulfilled and charged by ${cart.manufacturerName} ` +
             'as merchant of record. Items from other manufacturers need a separate order.';
 
+        // Show manufacturer badge
+        if (cart.manufacturerName) {
+            manufacturerBadge.hidden = false;
+            manufacturerName.textContent = cart.manufacturerName;
+        }
+
         tbody.replaceChildren(...cart.items.map((_, index) => renderRow(cart, index)));
     }
 
     render();
     window.addEventListener('storage', render);
 </script>
+
+<style>
+    .manufacturer-badge {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        padding: 0.5rem 0.75rem;
+        background: var(--primary-light);
+        border: 1px solid var(--primary-border);
+        font-size: 0.9rem;
+    }
+
+    .manufacturer-badge .chip {
+        font-size: 0.65rem;
+    }
+</style>
