@@ -4,6 +4,7 @@ import Base from '../../../layouts/Base.astro';
 import { buildCheckoutHandoffUrl } from '../../../lib/handoff';
 import { countryName } from '../../../lib/regions';
 import { getOrderForConfirmation } from '../../../server/orders';
+import { getDb } from '../../../server/db';
 
 export const prerender = false;
 
@@ -49,6 +50,14 @@ const total =
         : undefined;
 
 const placedAt = new Date(order.created_at).toUTCString();
+
+// Determine payment method from order events
+const events = db
+    .prepare("SELECT data_json FROM order_events WHERE order_id = ? ORDER BY created_at DESC LIMIT 1")
+    .all(id) as unknown as Array<{ data_json: string }>;
+const eventData = events.length > 0 ? JSON.parse(events[0]!.data_json) : {};
+const paymentMethod = eventData.paymentMethod ?? 'card';
+const paymentMethodLabel = paymentMethod === 'usdc' ? 'USDC (on-chain)' : 'Card';
 ---
 
 <Base title="Order received">
@@ -80,27 +89,37 @@ const placedAt = new Date(order.created_at).toUTCString();
     </table>
 
     <h2>Payment</h2>
-    {total && (
-        <p>
-            Order total: <strong>{total}</strong>
+    <div class="payment-info">
+        <p class="payment-method-badge">
+            Payment method: <strong>{paymentMethodLabel}</strong>
         </p>
-    )}
-    {
-        order.payment_mode === 'manufacturer-site' && payUrl ? (
+        {total && (
             <p>
-                One payment covers your whole order, charged by {manufacturerName}:
-                <a class="btn" href={payUrl}>
-                    Pay now{total ? ` — ${total}` : ''}
-                </a>
+                Order total: <strong>{total}</strong>
             </p>
-        ) : (
-            <p>
-                <strong>{manufacturerName}</strong> will contact you at{' '}
-                <strong>{contact.email}</strong> with payment instructions and to confirm
-                pricing and lead time.
+        )}
+        {order.dao_fee_minor !== null && order.dao_fee_minor > 0 && (
+            <p class="meta small">
+                Includes DAO governance fee: {totalFormat ? totalFormat.format(order.dao_fee_minor / 100) : `${order.dao_fee_minor} minor units`}
             </p>
-        )
-    }
+        )}
+        {
+            order.payment_mode === 'manufacturer-site' && payUrl ? (
+                <p>
+                    One payment covers your whole order, charged by {manufacturerName}:
+                    <a class="btn" href={payUrl} style="margin-top: 0.5rem;">
+                        Pay now{total ? ` — ${total}` : ''}
+                    </a>
+                </p>
+            ) : (
+                <p>
+                    <strong>{manufacturerName}</strong> will contact you at{' '}
+                    <strong>{contact.email}</strong> with payment instructions and to confirm
+                    pricing and lead time.
+                </p>
+            )
+        }
+    </div>
     <p class="muted small">
         Your payment goes directly to {manufacturerName} as merchant of record — the Arrow
         store does not process payments.
@@ -127,3 +146,17 @@ const placedAt = new Date(order.created_at).toUTCString();
         }.
     </p>
 </Base>
+
+<style>
+    .payment-info {
+        background: var(--bg-subtle);
+        border: 1px solid var(--border);
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .payment-method-badge {
+        margin: 0 0 0.5rem;
+        font-size: 0.9rem;
+    }
+</style>

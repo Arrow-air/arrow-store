@@ -25,7 +25,38 @@ import Base from '../layouts/Base.astro';
             <tbody data-checkout-items></tbody>
         </table>
 
-        <h2>Contact & shipping</h2>
+        <h2>Payment method</h2>
+        <div class="payment-methods" data-payment-methods>
+            <label class="payment-option card selected" data-payment-option="card">
+                <input type="radio" name="paymentMethod" value="card" checked />
+                <div class="payment-option-content">
+                    <strong>Card</strong>
+                    <span class="meta">Pay with credit or debit card. The manufacturer charges
+                    your card directly upon order confirmation.</span>
+                </div>
+            </label>
+            <label class="payment-option usdc" data-payment-option="usdc">
+                <input type="radio" name="paymentMethod" value="usdc" />
+                <div class="payment-option-content">
+                    <strong>USDC (on-chain)</strong>
+                    <span class="meta">Pay with USDC from a wallet. On-chain settlement via
+                    smart contract — the manufacturer sends a payment link after placing
+                    the order.</span>
+                </div>
+            </label>
+        </div>
+
+        <h2>DAO fee</h2>
+        <div class="dao-fee-info">
+            <p class="meta">
+                A small DAO governance fee is included in the price. This fee supports
+                Arrow's open development, community governance, and protocol improvements.
+                The exact amount is confirmed by the manufacturer before payment.
+            </p>
+            <p class="meta small" data-dao-fee-status></p>
+        </div>
+
+        <h2>Contact &amp; shipping</h2>
         <form class="checkout-form" data-checkout-form novalidate>
             <label>
                 Full name
@@ -75,7 +106,8 @@ import Base from '../layouts/Base.astro';
             <button class="btn" type="submit">Place order</button>
             <p class="muted small">
                 Placing an order sends your details to the manufacturer so they can arrange
-                payment and shipping. The store does not process payments.
+                payment and shipping. The store does not process payments — your card or
+                wallet is charged directly by the manufacturer.
             </p>
         </form>
     </section>
@@ -92,6 +124,8 @@ import Base from '../layouts/Base.astro';
     const form = document.querySelector<HTMLFormElement>('[data-checkout-form]')!;
     const countrySelect = document.querySelector<HTMLSelectElement>('[data-country-select]')!;
     const errorText = document.querySelector<HTMLElement>('[data-checkout-error]')!;
+    const paymentOptions = document.querySelectorAll<HTMLElement>('[data-payment-option]');
+    const daoFeeStatus = document.querySelector<HTMLElement>('[data-dao-fee-status]');
 
     const cart = getCart();
     if (cart.items.length === 0) {
@@ -119,6 +153,23 @@ import Base from '../layouts/Base.astro';
             option.textContent = countryName(code);
             countrySelect.appendChild(option);
         }
+
+        // DAO fee info
+        if (daoFeeStatus) {
+            daoFeeStatus.textContent =
+                `Manufacturer: ${cart.manufacturerName}. ` +
+                'The DAO fee is included in the manufacturer\'s price and is remitted on-chain.';
+        }
+    }
+
+    // Payment method selection UX
+    for (const option of paymentOptions) {
+        option.addEventListener('click', () => {
+            for (const opt of paymentOptions) opt.classList.remove('selected');
+            option.classList.add('selected');
+            const radio = option.querySelector<HTMLInputElement>('input[type="radio"]');
+            if (radio) radio.checked = true;
+        });
     }
 
     function showError(message: string): void {
@@ -138,6 +189,10 @@ import Base from '../layouts/Base.astro';
             return value === '' ? undefined : value;
         };
 
+        const paymentMethod = form.querySelector<HTMLInputElement>(
+            'input[name="paymentMethod"]:checked',
+        )?.value ?? 'card';
+
         const payload = {
             items: getCart().items.map((item) => ({
                 offerId: item.offerId,
@@ -155,6 +210,7 @@ import Base from '../layouts/Base.astro';
                 country: String(data.get('country')),
             },
             customerNotes: optional('customerNotes'),
+            paymentMethod,
         };
 
         const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
@@ -183,3 +239,66 @@ import Base from '../layouts/Base.astro';
         }
     });
 </script>
+
+<style>
+    .payment-methods {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .payment-option {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 1rem;
+        border: 1px solid var(--border);
+        cursor: pointer;
+        transition: border-color 0.2s, background-color 0.2s;
+    }
+
+    .payment-option:hover {
+        border-color: var(--card-border);
+        background: var(--card-hover);
+    }
+
+    .payment-option.selected {
+        border-color: var(--primary);
+        background: var(--primary-light);
+    }
+
+    .payment-option input[type="radio"] {
+        margin-top: 0.2rem;
+    }
+
+    .payment-option-content {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+
+    .payment-option-content .meta {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        line-height: 1.4;
+    }
+
+    .dao-fee-info {
+        background: var(--bg-subtle);
+        border: 1px solid var(--border);
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .dao-fee-info .meta {
+        margin: 0;
+        color: var(--text-secondary);
+    }
+
+    .dao-fee-info .meta.small {
+        font-size: 0.8rem;
+        margin-top: 0.5rem;
+        color: var(--text-muted);
+    }
+</style>
