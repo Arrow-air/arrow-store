@@ -86,7 +86,20 @@ const placedAt = new Date(order.created_at).toUTCString();
         </p>
     )}
     {
-        order.payment_mode === 'manufacturer-site' && payUrl ? (
+        order.payment_method === 'card' ? (
+            <p>
+                <strong>Paid by card.</strong>{' '}
+                {manufacturerName} confirms your payment against order reference{' '}
+                <strong>{order.id}</strong> and follows up by email with build and shipping
+                updates.
+            </p>
+        ) : order.payment_method === 'usdc' ? (
+            <p>
+                <strong>Paid with USDC on-chain.</strong>{' '}
+                {manufacturerName} confirms the settlement and follows up by email with build
+                and shipping updates.
+            </p>
+        ) : order.payment_mode === 'manufacturer-site' && payUrl ? (
             <p>
                 One payment covers your whole order, charged by {manufacturerName}:
                 <a class="btn" href={payUrl}>
@@ -105,6 +118,17 @@ const placedAt = new Date(order.created_at).toUTCString();
         Your payment goes directly to {manufacturerName} as merchant of record — the Arrow
         store does not process payments.
     </p>
+
+    <h2>What happens next</h2>
+    <ol class="next-steps">
+        <li>
+            <strong>{manufacturerName}</strong> confirms your payment and order reference{' '}
+            <strong>{order.id}</strong>.
+        </li>
+        <li>They confirm pricing and lead time by email to <strong>{contact.email}</strong>.</li>
+        <li>Your drone is built, tested, and shipped to the address below.</li>
+        <li>You get tracking and delivery updates by email as it progresses.</li>
+    </ol>
 
     <h2>Shipping to</h2>
     <p>

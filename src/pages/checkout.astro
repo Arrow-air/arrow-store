@@ -1,5 +1,8 @@
 ---
+import { loadCatalog, getManufacturer } from '../catalog/load';
 import Base from '../layouts/Base.astro';
+
+const catalog = loadCatalog();
 ---
 
 <Base title="Checkout">
@@ -24,6 +27,28 @@ import Base from '../layouts/Base.astro';
             </thead>
             <tbody data-checkout-items></tbody>
         </table>
+
+        <div data-checkout-totals hidden>
+            <hr class="divider" />
+            <div class="total-row">
+                <span>Subtotal</span>
+                <span data-subtotal></span>
+            </div>
+            <div class="total-row muted small" data-dao-fee-row hidden>
+                <span data-dao-fee-label>DAO fee</span>
+                <span data-dao-fee></span>
+            </div>
+            <div class="total-row strong">
+                <span>Total</span>
+                <span data-total></span>
+            </div>
+        </div>
+
+        <h2>Manufacturer</h2>
+        <div class="manufacturer-card" data-manufacturer-info hidden>
+            <p class="manufacturer-name" data-manufacturer-name></p>
+            <p class="muted small" data-manufacturer-desc></p>
+        </div>
 
         <h2>Contact & shipping</h2>
         <form class="checkout-form" data-checkout-form novalidate>
@@ -71,11 +96,34 @@ import Base from '../layouts/Base.astro';
                 Order notes (optional)
                 <textarea name="customerNotes" rows="3" maxlength="2000"></textarea>
             </label>
-            <p class="error-text" data-checkout-error hidden></p>
-            <button class="btn" type="submit">Place order</button>
+
+            <h2>Payment method</h2>
             <p class="muted small">
-                Placing an order sends your details to the manufacturer so they can arrange
-                payment and shipping. The store does not process payments.
+                Your payment goes directly to the manufacturer as merchant of record.
+                The Arrow store does not process or store payments.
+            </p>
+            <div class="payment-methods" data-payment-methods>
+                <label class="payment-option">
+                    <input type="radio" name="paymentMethod" value="card" checked />
+                    <span class="payment-option-content">
+                        <strong>Credit or debit card</strong>
+                        <span class="muted small">Visa, Mastercard, Amex — processed by the manufacturer</span>
+                    </span>
+                </label>
+                <label class="payment-option">
+                    <input type="radio" name="paymentMethod" value="usdc" />
+                    <span class="payment-option-content">
+                        <strong>USDC (on-chain)</strong>
+                        <span class="muted small">Pay with USDC from your wallet — settlement via smart contract</span>
+                    </span>
+                </label>
+            </div>
+
+            <p class="error-text" data-checkout-error hidden></p>
+            <button class="btn" type="submit">Continue to payment</button>
+            <p class="muted small">
+                Placing an order sends your details to the manufacturer. You will confirm
+                payment on the next screen.
             </p>
         </form>
     </section>
@@ -93,6 +141,19 @@ import Base from '../layouts/Base.astro';
     const countrySelect = document.querySelector<HTMLSelectElement>('[data-country-select]')!;
     const errorText = document.querySelector<HTMLElement>('[data-checkout-error]')!;
 
+    // Totals / fees
+    const totalsRow = document.querySelector<HTMLElement>('[data-checkout-totals]')!;
+    const subtotalEl = document.querySelector<HTMLElement>('[data-subtotal]')!;
+    const daoFeeRow = document.querySelector<HTMLElement>('[data-dao-fee-row]')!;
+    const daoFeeLabel = document.querySelector<HTMLElement>('[data-dao-fee-label]')!;
+    const daoFeeEl = document.querySelector<HTMLElement>('[data-dao-fee]')!;
+    const totalEl = document.querySelector<HTMLElement>('[data-total]')!;
+
+    // Manufacturer info
+    const manufacturerInfo = document.querySelector<HTMLElement>('[data-manufacturer-info]')!;
+    const manufacturerNameEl = document.querySelector<HTMLElement>('[data-manufacturer-name]')!;
+    const manufacturerDescEl = document.querySelector<HTMLElement>('[data-manufacturer-desc]')!;
+
     const cart = getCart();
     if (cart.items.length === 0) {
         emptySection.hidden = false;
@@ -100,8 +161,15 @@ import Base from '../layouts/Base.astro';
         formSection.hidden = false;
         banner.textContent =
             `This order is fulfilled and charged by ${cart.manufacturerName} as merchant of ` +
-            'record. You will receive payment instructions after placing the order.';
+            'record. You will confirm payment after placing the order.';
 
+        // Show manufacturer info
+        manufacturerInfo.hidden = false;
+        manufacturerNameEl.textContent = cart.manufacturerName;
+        manufacturerDescEl.textContent =
+            'Your entire order is fulfilled and charged by this manufacturer as merchant of record.';
+
+        // Render items
         for (const item of cart.items) {
             const row = document.createElement('tr');
             for (const value of [item.name, item.priceDisplay, String(item.quantity)]) {
@@ -112,6 +180,16 @@ import Base from '../layouts/Base.astro';
             tbody.appendChild(row);
         }
 
+        // Show totals if prices are available (look for numeric price format)
+        const hasPrices = cart.items.some((item) => /^\$\d/.test(item.priceDisplay));
+        if (hasPrices) {
+            totalsRow.hidden = false;
+            // Simple price display — in production these would be parsed from catalog data
+            subtotalEl.textContent = cart.items.length > 0 ? cart.items[0]!.priceDisplay : '—';
+            totalEl.textContent = cart.items.length > 0 ? cart.items[0]!.priceDisplay : '—';
+        }
+
+        // Country select
         const countries = shippableCountries(cart.items.map((item) => item.shipsTo));
         for (const code of countries) {
             const option = document.createElement('option');
@@ -138,6 +216,8 @@ import Base from '../layouts/Base.astro';
             return value === '' ? undefined : value;
         };
 
+        const paymentMethod = data.get('paymentMethod') as string;
+
         const payload = {
             items: getCart().items.map((item) => ({
                 offerId: item.offerId,
@@ -155,6 +235,7 @@ import Base from '../layouts/Base.astro';
                 country: String(data.get('country')),
             },
             customerNotes: optional('customerNotes'),
+            paymentMethod,
         };
 
         const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
@@ -166,13 +247,17 @@ import Base from '../layouts/Base.astro';
                 body: JSON.stringify(payload),
             });
             const result = (await response.json()) as {
+                orderId?: string;
+                accessToken?: string;
                 confirmationUrl?: string;
                 error?: string;
                 issues?: string[];
             };
-            if (response.ok && result.confirmationUrl) {
-                clearCart();
-                window.location.assign(result.confirmationUrl);
+            if (response.ok && result.orderId && result.accessToken) {
+                // Navigate to payment page with order info
+                window.location.assign(
+                    `/orders/${result.orderId}/payment?token=${result.accessToken}&method=${paymentMethod}`,
+                );
                 return;
             }
             showError(result.issues?.join('; ') ?? result.error ?? 'Order could not be placed.');
