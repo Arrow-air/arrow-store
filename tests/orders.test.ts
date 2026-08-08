@@ -248,6 +248,29 @@ describe('createOrder', () => {
     expect(order.payment_mode).toBe('manufacturer-site');
   });
 
+  it('persists the chosen payment method (card/usdc) and defaults to null when absent', () => {
+    // Nominal: card
+    const cardOrder = createOrder(makeInput({ paymentMethod: 'card' }), { db, catalog });
+    const card = db
+      .prepare('SELECT payment_method FROM orders WHERE id = ?')
+      .get(cardOrder.orderId) as { payment_method: string | null };
+    expect(card.payment_method).toBe('card');
+
+    // Nominal: usdc
+    const usdcOrder = createOrder(makeInput({ paymentMethod: 'usdc' }), { db, catalog });
+    const usdc = db
+      .prepare('SELECT payment_method FROM orders WHERE id = ?')
+      .get(usdcOrder.orderId) as { payment_method: string | null };
+    expect(usdc.payment_method).toBe('usdc');
+
+    // Absent → null (backward compatible)
+    const noneOrder = createOrder(makeInput(), { db, catalog });
+    const none = db
+      .prepare('SELECT payment_method FROM orders WHERE id = ?')
+      .get(noneOrder.orderId) as { payment_method: string | null };
+    expect(none.payment_method).toBeNull();
+  });
+
   it('expands the EU region token for ship-country checks', () => {
     const input = makeInput({
       items: [{ offerId: 'quiver-devkit-julius-germany', quantity: 1 }],

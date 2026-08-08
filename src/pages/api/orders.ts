@@ -26,6 +26,7 @@ const PayloadSchema = z.strictObject({
     country: z.string().length(2),
   }),
   customerNotes: z.string().max(2000).optional(),
+  paymentMethod: z.enum(['card', 'usdc']).optional(),
 });
 
 export const POST: APIRoute = async ({ request }) => {
@@ -52,6 +53,7 @@ export const POST: APIRoute = async ({ request }) => {
       orderId: created.orderId,
       accessToken: created.accessToken,
       confirmationUrl: `/orders/${created.orderId}/confirmation?token=${created.accessToken}`,
+      paymentMethod: parsed.data.paymentMethod ?? 'card',
     });
   } catch (error) {
     if (error instanceof OrderValidationError) {

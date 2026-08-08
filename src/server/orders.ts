@@ -34,6 +34,7 @@ export interface OrderInput {
   items: Array<{ offerId: string; quantity: number }>;
   customer: CustomerInput;
   customerNotes?: string;
+  paymentMethod?: 'card' | 'usdc';
 }
 
 export interface CreatedOrder {
@@ -171,8 +172,8 @@ export function createOrder(input: OrderInput, options: Options = {}): CreatedOr
         id, created_at, status, manufacturer_id, checkout_group_id, catalog_ref,
         ship_country, payment_mode, payment_status, currency, subtotal_minor,
         dao_fee_minor, dao_fee_status, commitment_hash, commitment_version,
-        contact_salt, access_token_hash, customer_notes
-      ) VALUES (?, ?, 'received', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        contact_salt, access_token_hash, customer_notes, payment_method
+      ) VALUES (?, ?, 'received', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       now,
@@ -190,6 +191,7 @@ export function createOrder(input: OrderInput, options: Options = {}): CreatedOr
       contactSalt,
       hashAccessToken(accessToken),
       input.customerNotes ?? null,
+      input.paymentMethod ?? null,
     );
 
     const insertItem = db.prepare(
@@ -273,6 +275,7 @@ export interface OrderRecord {
   commitment_hash: string | null;
   commitment_version: number | null;
   customer_notes: string | null;
+  payment_method: string | null;
 }
 
 export interface OrderItemRecord {

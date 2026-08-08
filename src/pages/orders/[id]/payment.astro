@@ -1,0 +1,283 @@
+---
+import { getManufacturer, loadCatalog } from '../../../catalog/load';
+import { countryName } from '../../../lib/regions';
+import { getOrderForConfirmation } from '../../../server/orders';
+import Base from '../../../layouts/Base.astro';
+
+export const prerender = false;
+
+const { id } = Astro.params;
+const token = Astro.url.searchParams.get('token');
+const method = Astro.url.searchParams.get('method') ?? 'card';
+const view = id && token ? getOrderForConfirmation(id, token) : null;
+
+if (!view) {
+    return new Response('Not found', { status: 404 });
+}
+
+const { order, items, contact } = view;
+const catalog = loadCatalog();
+const manufacturer = getManufacturer(order.manufacturer_id, catalog);
+const manufacturerName = manufacturer?.displayName ?? order.manufacturer_id;
+const paymentMethod = method === 'usdc' ? 'usdc' : 'card';
+
+const totalFormat =
+    order.currency && new Intl.NumberFormat('en-US', { style: 'currency', currency: order.currency });
+const total =
+    order.subtotal_minor !== null && totalFormat
+        ? totalFormat.format(order.subtotal_minor / 100)
+        : undefined;
+
+const placedAt = new Date(order.created_at).toUTCString();
+---
+
+<Base title="Confirm payment">
+    <h1>Confirm payment</h1>
+
+    <p class="banner">
+        Order <strong>{order.id}</strong>, placed {placedAt}.
+    </p>
+
+    <h2>Order summary</h2>
+    <table class="cart-table">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th>Price</th>
+                <th>Quantity</th>
+            </tr>
+        </thead>
+        <tbody>
+            {
+                items.map((item) => (
+                    <tr>
+                        <td>{item.name_snapshot}</td>
+                        <td>{item.price_display === 'TBD' ? 'To be confirmed' : item.price_display}</td>
+                        <td>{item.quantity}</td>
+                    </tr>
+                ))
+            }
+        </tbody>
+    </table>
+
+    {total && (
+        <div class="total-row strong">
+            <span>Total</span>
+            <span>{total}</span>
+        </div>
+    )}
+
+    <h2>Sold and charged by</h2>
+    <div class="manufacturer-card">
+        <p class="manufacturer-name">{manufacturerName}</p>
+        {manufacturer?.supportEmail && (
+            <p class="muted small">
+                Contact: <a href={`mailto:${manufacturer.supportEmail}`}>{manufacturer.supportEmail}</a>
+            </p>
+        )}
+        {manufacturer?.website && (
+            <p class="muted small">
+                Website: <a href={manufacturer.website}>{manufacturer.website}</a>
+            </p>
+        )}
+        <p class="muted small">
+            Your payment goes directly to {manufacturerName} as merchant of record.
+            The Arrow store does not process or store payments.
+        </p>
+    </div>
+
+    <h2>Shipping to</h2>
+    <p>
+        {contact.full_name}<br />
+        {contact.address_line1}<br />
+        {contact.address_line2 && (
+            <>
+                {contact.address_line2}
+                <br />
+            </>
+        )}
+        {contact.city}{contact.region ? `, ${contact.region}` : ''} {contact.postal_code}<br />
+        {countryName(contact.country)}
+    </p>
+
+    {
+        paymentMethod === 'card' ? (
+            <section id="card-payment" class="payment-section">
+                <h2>Pay with card</h2>
+                <p class="muted small">
+                    {total && <>Amount: <strong>{total}</strong><br /></>}
+                    This is a demo — no real payment is processed. In production, the
+                    manufacturer processes card payments as merchant of record.
+                </p>
+                <form class="payment-form" data-card-form novalidate>
+                    <label>
+                        Cardholder name
+                        <input name="cardName" required maxlength="200" placeholder="Jane Smith" />
+                    </label>
+                    <label>
+                        Card number
+                        <input
+                            name="cardNumber"
+                            required
+                            maxlength="19"
+                            placeholder="4111 1111 1111 1111"
+                            inputmode="numeric"
+                            autocomplete="cc-number"
+                        />
+                    </label>
+                    <div class="field-row">
+                        <label>
+                            Expiry
+                            <input
+                                name="expiry"
+                                required
+                                maxlength="5"
+                                placeholder="MM/YY"
+                                inputmode="numeric"
+                                autocomplete="cc-exp"
+                            />
+                        </label>
+                        <label>
+                            CVC
+                            <input
+                                name="cvc"
+                                required
+                                maxlength="4"
+                                placeholder="123"
+                                inputmode="numeric"
+                                autocomplete="cc-csc"
+                            />
+                        </label>
+                    </div>
+                    <p class="error-text" data-card-error hidden></p>
+                    <button class="btn" type="submit">
+                        Pay {total ? total : ''}
+                    </button>
+                </form>
+                <p class="muted small">
+                    <strong>Demo:</strong> the card form is a UI simulation. No real payment
+                    is processed and no card data is transmitted.
+                </p>
+            </section>
+        ) : (
+            <section id="usdc-payment" class="payment-section">
+                <h2>Pay with USDC (on-chain)</h2>
+                <p class="muted small">
+                    {total && <>Amount: <strong>{total}</strong><br /></>}
+                    Pay with USDC via your wallet. Settlement is handled by the
+                    manufacturer's smart contract.
+                </p>
+                <div class="wallet-flow" data-usdc-container>
+                    <div class="wallet-step" data-wallet-connect-step>
+                        <h3>1. Connect wallet</h3>
+                        <p class="muted small">
+                            Connect your wallet to approve the USDC transfer to the manufacturer.
+                        </p>
+                        <button class="btn" type="button" data-connect-wallet>
+                            Connect wallet
+                        </button>
+                    </div>
+                    <div class="wallet-step" data-wallet-approve-step hidden>
+                        <h3>2. Approve payment</h3>
+                        <p class="muted small">
+                            Approve the USDC transfer of <strong>{total || 'the agreed amount'}</strong>{' '}
+                            to {manufacturerName}'s smart contract.
+                        </p>
+                        <div class="contract-details">
+                            <p class="muted small">
+                                <strong>Contract:</strong> {manufacturer?.merchantOfRecord?.legalName ?? 'Manufacturer smart contract'}
+                                <span class="chip">Demo</span>
+                            </p>
+                            <p class="muted small">
+                                <strong>Network:</strong> Base (Chain ID: 8453)
+                                <span class="chip">Demo</span>
+                            </p>
+                            <p class="muted small">
+                                <strong>DAI fee:</strong> Included in the total — remitted to the Arrow DAO
+                                automatically via the settlement contract.
+                            </p>
+                        </div>
+                        <button class="btn" type="button" data-confirm-usdc>
+                            Confirm payment
+                        </button>
+                    </div>
+                    <div class="wallet-step" data-wallet-processing-step hidden>
+                        <h3>Processing payment...</h3>
+                        <p class="muted small">
+                            Waiting for transaction confirmation on-chain.
+                        </p>
+                        <div class="spinner" aria-label="Processing"></div>
+                    </div>
+                </div>
+                <p class="muted small">
+                    <strong>Demo:</strong> the USDC flow is a UI simulation. No real wallet
+                    connection or on-chain transaction is performed.
+                </p>
+            </section>
+        )
+    }
+
+    <p class="muted small" style="margin-top: 2rem;">
+        Questions? Reply to the manufacturer's follow-up email or contact{' '}
+        {manufacturer?.supportEmail ? manufacturer.supportEmail : 'the manufacturer directly'}.
+    </p>
+</Base>
+
+<script>
+    const orderId = '{{id}}';
+    const accessToken = new URLSearchParams(window.location.search).get('token');
+    const method = new URLSearchParams(window.location.search).get('method') ?? 'card';
+
+    const confirmUrl = `/orders/${orderId}/confirmation?token=${accessToken}`;
+
+    if (method === 'card') {
+        const cardForm = document.querySelector<HTMLFormElement>('[data-card-form]')!;
+        const errorEl = document.querySelector<HTMLElement>('[data-card-error]')!;
+
+        cardForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            errorEl.hidden = true;
+
+            if (!cardForm.reportValidity()) return;
+
+            // Simulate card payment processing
+            const submit = cardForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+            submit.disabled = true;
+            submit.textContent = 'Processing...';
+
+            // Simulated delay (demo only — no real payment)
+            setTimeout(() => {
+                window.location.assign(confirmUrl);
+            }, 1500);
+        });
+    }
+
+    if (method === 'usdc') {
+        const connectBtn = document.querySelector<HTMLButtonElement>('[data-connect-wallet]')!;
+        const confirmBtn = document.querySelector<HTMLButtonElement>('[data-confirm-usdc]')!;
+        const connectStep = document.querySelector<HTMLElement>('[data-wallet-connect-step]')!;
+        const approveStep = document.querySelector<HTMLElement>('[data-wallet-approve-step]')!;
+        const processingStep = document.querySelector<HTMLElement>('[data-wallet-processing-step]')!;
+
+        connectBtn.addEventListener('click', () => {
+            // Simulate wallet connection (demo only)
+            connectBtn.disabled = true;
+            connectBtn.textContent = 'Connecting...';
+
+            setTimeout(() => {
+                connectStep.hidden = true;
+                approveStep.hidden = false;
+            }, 800);
+        });
+
+        confirmBtn.addEventListener('click', () => {
+            approveStep.hidden = true;
+            processingStep.hidden = false;
+
+            // Simulate on-chain confirmation (demo only)
+            setTimeout(() => {
+                window.location.assign(confirmUrl);
+            }, 2000);
+        });
+    }
+</script>

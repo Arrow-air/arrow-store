@@ -124,4 +124,15 @@ export const MIGRATIONS: Migration[] = [
       ALTER TABLE orders ADD COLUMN contact_salt TEXT;
     `,
   },
+  {
+    id: '0004_payment_method',
+    // Checkout payment method chosen by the customer (bounty #217 demo):
+    // card (processed by the manufacturer as merchant of record) or
+    // usdc (on-chain settlement). Nullable for orders created before this
+    // migration; the payment page records it at order time.
+    sql: `
+      ALTER TABLE orders ADD COLUMN payment_method TEXT
+        CHECK (payment_method IN ('card', 'usdc'));
+    `,
+  },
 ];
